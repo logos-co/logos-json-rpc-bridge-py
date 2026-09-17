@@ -157,8 +157,11 @@ becomes `stale`, discovery runs again (the status and digests may change), and e
 subscription to the module ends with `SubscriptionTerminated` (`reason:
 "provider_changed"`). A typed consumer should run `check_compat()` again before it
 subscribes again. A provider that the protocol loses ends subscriptions with
-`provider_unavailable` instead. A quick reload of the same build may go unnoticed: events
-keep flowing and `Event.generation` does not change.
+`provider_unavailable` instead. A quick reload of the same build could go unnoticed on a
+bridge whose logos-protocol predates `dcf4f05`: events kept flowing and
+`Event.generation` did not change. logos-protocol#91, which `dcf4f05` carries and the
+locked bridge `efd4721` therefore has, reports such a swap on the qt_remote transport —
+the subscription ends and the next one starts at a higher generation.
 
 ## Typed clients
 
@@ -406,8 +409,10 @@ request is sent, so events that arrive before the acknowledgement are kept. A fa
 subscribe never reuses its id. When the bridge terminates a subscription, queued events
 are delivered first, then `SubscriptionTerminated` is raised; the same holds for a
 disconnect (`ConnectionClosed`). Subscribe again for a fresh stream and treat the gap as
-lost; `Event.generation` increases after a provider restart. After `provider_changed` the
-module is a different build: check its contract again first (see
+lost; `Event.generation` increases after a provider restart. From logos-protocol
+`dcf4f05` on it counts provider establishments rather than subscribers, so a second
+subscriber joining a live provider sees the generation it already had. After
+`provider_changed` the module is a different build: check its contract again first (see
 [Contracts and discovery](#contracts-and-discovery)).
 
 ## Timeouts
@@ -604,11 +609,26 @@ starts and stops the node in a worker thread) do the same:
 - A provider reloaded while the bridge relayed its stream (a chunked download, say) can
   stay unreachable through the bridge's upstream client. Bridges from
   logos-json-rpc-bridge `c8135ec` (#6) on replace that client, measured at about 5.5 s,
-  and count it in `getInfo().upstream_clients_replaced`; older bridges needed a restart
-  (`json_rpc_bridge.stop`, then `start`).
+  and count it in `getInfo().upstream_clients_replaced`.
+  - An older bridge needs a restart (`json_rpc_bridge.stop`, then `start`), and the
+    order matters: **load the provider first, then restart the bridge.** A restart
+    while the provider is still down, followed by a subscription, crashed the
+    pre-recycler build (`c99bbc5`) in 4 of 4 rounds. The fault is a use-after-free in
+    logos-protocol, not in the bridge: `RemoteTransportConnection::requestObject()`
+    freed a replica facade that had never reached `Valid`, while Qt Remote Objects
+    still held it as a raw pointer. logos-protocol#95 parks such a facade instead of
+    freeing it, and a Qt patch for the same hazard is queued separately; neither is in
+    the bridge this package locks (`efd4721`, whose logos-protocol `dcf4f05` predates
+    #95), so the ordering rule stands there too.
 - A call to an exposed module whose provider is not loaded is answered `ModuleUnavailable`
-  (-32001) only when `limits.call_timeout_ms` runs out (measured: 29.7 s at the default
-  30 s), although its subscriptions end at once.
+  (-32001) when `limits.call_timeout_ms` runs out (measured: 29.7 s at the default 30 s)
+  **or later**, although its subscriptions end at once.
+  - Concurrent calls to an unreachable module do not each get their own deadline. Each
+    blocks the host's Qt main thread, the next one nests inside it, and none of them can
+    time out while new ones keep arriving. Measured: 14 calls, one per second across a
+    14 s outage, were all answered only once the provider came back — and as
+    `UpstreamTimeout` (-32002), not `ModuleUnavailable`. Send calls to a provider you
+    expect to be down one at a time.
 - Subscription loss is reported only with logos-protocol 0.9 or newer
   (`subscription_continuity` in `getInfo()`).
 - Bridges without the keep-alive fix count every kept-alive HTTP request against the
