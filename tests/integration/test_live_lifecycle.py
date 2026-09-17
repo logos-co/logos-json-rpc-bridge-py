@@ -1,4 +1,5 @@
-"""The lifecycle canary: a provider unloaded and loaded again under a live bridge."""
+"""The lifecycle canary: a provider unloaded and loaded again under a live bridge, and a
+reload onto the same build, which the transport reports without any revalidation."""
 
 from __future__ import annotations
 
@@ -23,6 +24,8 @@ CPP = "test_fullapi_cpp"
 
 
 CALL_TIMEOUT_MS = 5000
+#: Long enough that no revalidation pass can run during the reload test.
+NO_REVALIDATION_MS = 600_000
 
 
 @pytest.fixture
@@ -82,3 +85,33 @@ async def test_the_lifecycle_canary(canary: LiveBridge) -> None:
             assert event.subscription == again.ids[0]
             assert event.generation > first.generation
         assert await bridge.call(CPP, "echoInt", 3) == 3
+
+
+@async_test(timeout=180)
+async def test_a_reload_onto_the_same_build_ends_the_subscription(node_factory: NodeFactory) -> None:
+    """logos-protocol#91 (``dcf4f05``): the transport reports the swap, revalidation does not."""
+    config = bridge_config([CPP], revalidate_ms=NO_REVALIDATION_MS,
+                           limits={"call_timeout_ms": CALL_TIMEOUT_MS})
+    live = node_factory(name="reload", providers=(CPP,), config=config)
+    assert (await blocking(live.info))["subscription_continuity"] is True
+    before = live.views()[CPP]
+    async with AsyncBridgeClient(live.ws_url) as bridge:
+        stream = await bridge.subscribe(CPP, "intEvent")
+        await bridge.call(CPP, "fireIntEvent", 1)
+        first = await stream.get(timeout=15)
+        assert first.data == [1]
+
+        # The same build comes back: the loss path reports it, not discovery.
+        await blocking(live.reload, CPP)
+        with pytest.raises(SubscriptionTerminated) as ended:
+            await stream.get(timeout=60)
+        assert (ended.value.reason, ended.value.module, ended.value.event) == ("provider_unavailable", CPP,
+                                                                              "intEvent")
+        # It really was the same build: the digests never moved.
+        after = await blocking(live.wait_status, CPP, before["interface_status"], 60)
+        assert (after["interface_sha256"], after["contract_sha256"]) == (before["interface_sha256"],
+                                                                        before["contract_sha256"])
+
+        async with bridge.subscribe(CPP, "intEvent") as again:
+            event = await next_event_after_firing(bridge, again, 2)
+            assert event.generation > first.generation
