@@ -1,0 +1,1672 @@
+{
+  "schema": 1,
+  "contract": "full_api",
+  "comment": [
+    "Conformance cases for the LIDL type contract, in a language-neutral form so",
+    "every consumer driver replays the SAME table instead of hand-writing its own",
+    "checks. One LIDL type maps to exactly one type per language; numbers are",
+    "64-bit only; bytes ride the canonical {\"_bytes\": \"<base64url>\"} tag at every",
+    "depth. A case names the (type, position) cell it covers so coverage can be",
+    "computed against the contract rather than maintained by hand.",
+    "",
+    "`expect` is the value the call must return. `expect_by_provider` overrides it",
+    "where the two providers legitimately differ (identity) or divergently (a",
+    "leniency difference we PIN rather than pretend away). A REJECTION is spelled",
+    "`\"expect\": {\"__error__\": \"<code>\"}` \u2014 matched as a substring of the error the",
+    "call actually raised, so `dispatch_failed` covers the whole envelope. Bytes",
+    "appear as {\"_bytes\": ...}; a driver decodes them to its native byte type",
+    "before the call and after the return.",
+    "",
+    "These are the ONLY expectation keys. The driver rejects a case carrying any",
+    "key it does not read, because ignoring one is silent and wrong in the worst",
+    "direction: an expectation the driver never looks at leaves the case with no",
+    "expectation at all, which files it as `skip` \u2014 present in the table, counted",
+    "as coverage, asserting nothing. This paragraph used to document an",
+    "`expect_error` key that no driver ever implemented.",
+    "",
+    "THE FAILURE CLASSES. `<code>` is the class, not the envelope verdict: the",
+    "driver reads the CLI's nested `error.code` in preference to its top-level",
+    "`code`, because the latter is METHOD_FAILED for every way a call can fail.",
+    "The classes, and the case family that makes each one executable:",
+    "",
+    "  A  transport failure \u2014 the module is not there, the call timed out, the",
+    "     caller was not authorized. LP_ERR_UNAVAILABLE plus an error object;",
+    "     `object_unavailable` / `timeout` / `transport_error` / `call_failed` /",
+    "     `unauthorized`.                                  failure/A/*",
+    "  B  provider rejection, wrong argument COUNT \u2014 `invalid_args`.  failure/B/*",
+    "  C  unknown method NAME \u2014 a bare null with LP_OK, byte-identical to a",
+    "     legitimately empty answer. Resolvable only OUT OF BAND, by asking the",
+    "     module for its method list.                                failure/C/*",
+    "  D  a legitimate empty/null answer, which must NOT read as a failure.",
+    "                                                                failure/D/*",
+    "  E  provider rejection, wrong argument VALUES \u2014 `dispatch_failed`. The",
+    "     hostile/* and adversarial/* families are this class.",
+    "",
+    "C and D are the pair the whole exercise turns on: they are the same bytes on",
+    "the wire, so any case that claims to separate them has to say WHERE the",
+    "separation comes from.",
+    "",
+    "Every expectation here was MEASURED against both providers, not assumed.",
+    "",
+    "THE ISOLATE RULE, stated once here because five cases depend on it and none",
+    "of them should depend on another case's prose. A hostile case that WEDGES the",
+    "daemon does not merely fail itself: the 20s it spends is not free for the",
+    "daemon it is spent in, and every call issued after it in the same block can",
+    "come back METHOD_FAILED at 20s -- including cases the matrix shows passing.",
+    "`isolate: true` gives such a case a daemon of its own.",
+    "",
+    "It is kept on the arity cases as a REGRESSION GUARD even though the wedge they",
+    "caused is fixed (`args.size() < minArgs` reached the C++ cdylib dispatch in",
+    "logos-cpp-sdk 44b92b0 / #127, and the upper bound landed in #150 and",
+    "logos-rust-sdk #50). What the wedge used to do was not fail but KILL: it hung",
+    "20s and left test_fullapi_qtproxy object_unavailable for the life of that",
+    "daemon, turning every later case in the block red for reasons that had nothing",
+    "to do with those cases. A guard that costs one daemon is the right price for",
+    "never diagnosing that twice.",
+    "",
+    "An unisolated hostile case can also invent a defect in ITSELF: four qtproxy",
+    "cells once looked like a Qt-hop bug and were about to be registered as one;",
+    "adding `isolate: true` to a single case and changing nothing else made all",
+    "four behave. It was measuring the cases before it."
+  ],
+  "providers": [
+    "test_fullapi_cpp",
+    "test_fullapi_rust"
+  ],
+  "cases": [
+    {
+      "id": "identity/whoami",
+      "type": "tstr",
+      "position": "method_return",
+      "method": "whoAmI",
+      "args": [],
+      "expect_by_provider": {
+        "test_fullapi_cpp": "test_fullapi_cpp",
+        "test_fullapi_rust": "test_fullapi_rust"
+      },
+      "tags": [
+        "nominal"
+      ],
+      "why": "proves which provider a bound interface actually resolved to"
+    },
+    {
+      "id": "tstr/nominal",
+      "type": "tstr",
+      "position": "method_arg,method_return",
+      "method": "echoString",
+      "args": [
+        "round-trip"
+      ],
+      "expect": "round-trip",
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "tstr/empty",
+      "type": "tstr",
+      "position": "method_arg,method_return",
+      "method": "echoString",
+      "args": [
+        ""
+      ],
+      "expect": "",
+      "tags": [
+        "empty"
+      ]
+    },
+    {
+      "id": "tstr/unicode",
+      "type": "tstr",
+      "position": "method_arg,method_return",
+      "method": "echoString",
+      "args": [
+        "h\u00e9llo\u2192\ud83c\udf0d"
+      ],
+      "expect": "h\u00e9llo\u2192\ud83c\udf0d",
+      "tags": [
+        "boundary"
+      ],
+      "why": "multi-byte UTF-8 across the argv boundary"
+    },
+    {
+      "id": "int/nominal",
+      "type": "int",
+      "position": "method_arg,method_return",
+      "method": "echoInt",
+      "args": [
+        42
+      ],
+      "expect": 42,
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "int/negative",
+      "type": "int",
+      "position": "method_arg,method_return",
+      "method": "echoInt",
+      "args": [
+        -7
+      ],
+      "expect": -7,
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "int/boundary/above-int32",
+      "type": "int",
+      "position": "method_arg,method_return",
+      "method": "echoInt",
+      "args": [
+        4294967296
+      ],
+      "expect": 4294967296,
+      "tags": [
+        "boundary"
+      ],
+      "why": "logoscore CLI parsed args with std::stoi (32-bit); everything above int32 fell through to a double"
+    },
+    {
+      "id": "int/boundary/above-2^53",
+      "type": "int",
+      "position": "method_arg,method_return",
+      "method": "echoInt",
+      "args": [
+        9007199254740993
+      ],
+      "expect": 9007199254740993,
+      "tags": [
+        "boundary"
+      ],
+      "why": "first value a double cannot represent \u2014 the one that makes the stoi bug visible"
+    },
+    {
+      "id": "int/boundary/min",
+      "type": "int",
+      "position": "method_arg,method_return",
+      "method": "echoInt",
+      "args": [
+        -9223372036854775808
+      ],
+      "expect": -9223372036854775808,
+      "tags": [
+        "boundary"
+      ]
+    },
+    {
+      "id": "int/boundary/max",
+      "type": "int",
+      "position": "method_arg,method_return",
+      "method": "echoInt",
+      "args": [
+        9223372036854775807
+      ],
+      "expect": 9223372036854775807,
+      "tags": [
+        "boundary"
+      ]
+    },
+    {
+      "id": "uint/nominal",
+      "type": "uint",
+      "position": "method_arg,method_return",
+      "method": "echoUint",
+      "args": [
+        7
+      ],
+      "expect": 7,
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "uint/zero",
+      "type": "uint",
+      "position": "method_arg,method_return",
+      "method": "echoUint",
+      "args": [
+        0
+      ],
+      "expect": 0,
+      "tags": [
+        "empty"
+      ]
+    },
+    {
+      "id": "uint/boundary/above-2^53",
+      "type": "uint",
+      "position": "method_arg,method_return",
+      "method": "echoUint",
+      "args": [
+        9007199254740993
+      ],
+      "expect": 9007199254740993,
+      "tags": [
+        "boundary"
+      ]
+    },
+    {
+      "id": "uint/boundary/max",
+      "type": "uint",
+      "position": "method_arg,method_return",
+      "method": "echoUint",
+      "args": [
+        18446744073709551615
+      ],
+      "expect": 18446744073709551615,
+      "tags": [
+        "boundary"
+      ],
+      "why": "the whole point of `unsigned stays unsigned`: above int64max there is no signed representation"
+    },
+    {
+      "id": "uint/boundary/int64max-plus-one",
+      "type": "uint",
+      "position": "method_arg,method_return",
+      "method": "echoUint",
+      "args": [
+        9223372036854775808
+      ],
+      "expect": 9223372036854775808,
+      "tags": [
+        "boundary"
+      ],
+      "why": "2^63 is the first value with no int64 representation. A binding that routes unsigned through a signed 64-bit type wraps it to -2^63 here; one that widens to double loses the low bits. It is the single most diagnostic uint value and the inline py table has always pinned it."
+    },
+    {
+      "id": "float64/nominal",
+      "type": "float64",
+      "position": "method_arg,method_return",
+      "method": "echoDouble",
+      "args": [
+        2.5
+      ],
+      "expect": 2.5,
+      "tags": [
+        "nominal"
+      ],
+      "why": "dyadic so a plain == holds across json and cbor"
+    },
+    {
+      "id": "float64/negative",
+      "type": "float64",
+      "position": "method_arg,method_return",
+      "method": "echoDouble",
+      "args": [
+        -0.5
+      ],
+      "expect": -0.5,
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "bool/true",
+      "type": "bool",
+      "position": "method_arg,method_return",
+      "method": "echoBool",
+      "args": [
+        true
+      ],
+      "expect": true,
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "bool/false",
+      "type": "bool",
+      "position": "method_arg,method_return",
+      "method": "echoBool",
+      "args": [
+        false
+      ],
+      "expect": false,
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "bstr/nominal",
+      "type": "bstr",
+      "position": "method_arg,method_return",
+      "method": "echoBytes",
+      "args": [
+        {
+          "_bytes": "aGVsbG8"
+        }
+      ],
+      "expect": {
+        "_bytes": "aGVsbG8"
+      },
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "bstr/empty",
+      "type": "bstr",
+      "position": "method_arg,method_return",
+      "method": "echoBytes",
+      "args": [
+        {
+          "_bytes": ""
+        }
+      ],
+      "expect": {
+        "_bytes": ""
+      },
+      "tags": [
+        "empty"
+      ]
+    },
+    {
+      "id": "bstr/high-bytes",
+      "type": "bstr",
+      "position": "method_arg,method_return",
+      "method": "echoBytes",
+      "args": [
+        {
+          "_bytes": "AQID_w"
+        }
+      ],
+      "expect": {
+        "_bytes": "AQID_w"
+      },
+      "tags": [
+        "boundary"
+      ],
+      "why": "0xff would be UTF-8 mangled by any path that treats bytes as a string"
+    },
+    {
+      "id": "bstr/embedded-nul",
+      "type": "bstr",
+      "position": "method_arg,method_return",
+      "method": "echoBytes",
+      "args": [
+        {
+          "_bytes": "YQBi"
+        }
+      ],
+      "expect": {
+        "_bytes": "YQBi"
+      },
+      "tags": [
+        "boundary"
+      ],
+      "why": "a NUL truncates anything that goes through a C string"
+    },
+    {
+      "id": "bstr/all-256",
+      "type": "bstr",
+      "position": "method_arg,method_return",
+      "method": "echoBytes",
+      "args": [
+        {
+          "_bytes": "__ALL_BYTES__"
+        }
+      ],
+      "expect": {
+        "_bytes": "__ALL_BYTES__"
+      },
+      "tags": [
+        "boundary"
+      ],
+      "why": "every byte value 0x00..0xff in one payload; the driver expands the sentinel"
+    },
+    {
+      "id": "any/tstr",
+      "type": "any",
+      "position": "method_arg,method_return",
+      "method": "echoAny",
+      "args": [
+        "hi"
+      ],
+      "expect": "hi",
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "any/int",
+      "type": "any",
+      "position": "method_arg,method_return",
+      "method": "echoAny",
+      "args": [
+        42
+      ],
+      "expect": 42,
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "any/bool",
+      "type": "any",
+      "position": "method_arg,method_return",
+      "method": "echoAny",
+      "args": [
+        true
+      ],
+      "expect": true,
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "any/list",
+      "type": "any",
+      "position": "method_arg,method_return",
+      "method": "echoAny",
+      "args": [
+        [
+          1,
+          2,
+          3
+        ]
+      ],
+      "expect": [
+        1,
+        2,
+        3
+      ],
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "any/map",
+      "type": "any",
+      "position": "method_arg,method_return",
+      "method": "echoAny",
+      "args": [
+        {
+          "k": "v"
+        }
+      ],
+      "expect": {
+        "k": "v"
+      },
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "any/uint-max",
+      "type": "any",
+      "position": "method_arg,method_return",
+      "method": "echoAny",
+      "args": [
+        18446744073709551615
+      ],
+      "expect": 18446744073709551615,
+      "tags": [
+        "boundary"
+      ]
+    },
+    {
+      "id": "[tstr]/nominal",
+      "type": "[tstr]",
+      "position": "method_arg,method_return",
+      "method": "echoStringList",
+      "args": [
+        [
+          "a",
+          "b",
+          "c"
+        ]
+      ],
+      "expect": [
+        "a",
+        "b",
+        "c"
+      ],
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "[tstr]/empty",
+      "type": "[tstr]",
+      "position": "method_arg,method_return",
+      "method": "echoStringList",
+      "args": [
+        []
+      ],
+      "expect": [],
+      "tags": [
+        "empty"
+      ],
+      "why": "an empty typed array is where the QVariant path used to lose the element type"
+    },
+    {
+      "id": "[int]/nominal",
+      "type": "[int]",
+      "position": "method_arg,method_return",
+      "method": "echoIntList",
+      "args": [
+        [
+          1,
+          2,
+          3
+        ]
+      ],
+      "expect": [
+        1,
+        2,
+        3
+      ],
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "[int]/signed",
+      "type": "[int]",
+      "position": "method_arg,method_return",
+      "method": "echoIntList",
+      "args": [
+        [
+          -1,
+          0,
+          5
+        ]
+      ],
+      "expect": [
+        -1,
+        0,
+        5
+      ],
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "[int]/empty",
+      "type": "[int]",
+      "position": "method_arg,method_return",
+      "method": "echoIntList",
+      "args": [
+        []
+      ],
+      "expect": [],
+      "tags": [
+        "empty"
+      ]
+    },
+    {
+      "id": "[int]/boundary",
+      "type": "[int]",
+      "position": "method_arg,method_return",
+      "method": "echoIntList",
+      "args": [
+        [
+          -9223372036854775808,
+          9223372036854775807
+        ]
+      ],
+      "expect": [
+        -9223372036854775808,
+        9223372036854775807
+      ],
+      "tags": [
+        "boundary"
+      ],
+      "why": "64-bit range must survive INSIDE a container, not only as a scalar"
+    },
+    {
+      "id": "[uint]/nominal",
+      "type": "[uint]",
+      "position": "method_arg,method_return",
+      "method": "echoUintList",
+      "args": [
+        [
+          4,
+          5,
+          6
+        ]
+      ],
+      "expect": [
+        4,
+        5,
+        6
+      ],
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "[uint]/empty",
+      "type": "[uint]",
+      "position": "method_arg,method_return",
+      "method": "echoUintList",
+      "args": [
+        []
+      ],
+      "expect": [],
+      "tags": [
+        "empty"
+      ]
+    },
+    {
+      "id": "[uint]/boundary/max",
+      "type": "[uint]",
+      "position": "method_arg,method_return",
+      "method": "echoUintList",
+      "args": [
+        [
+          18446744073709551615
+        ]
+      ],
+      "expect": [
+        18446744073709551615
+      ],
+      "tags": [
+        "boundary"
+      ],
+      "why": "uint64 above int64max INSIDE a container \u2014 see known.json M1"
+    },
+    {
+      "id": "[float64]/nominal",
+      "type": "[float64]",
+      "position": "method_arg,method_return",
+      "method": "echoDoubleList",
+      "args": [
+        [
+          1.5,
+          2.5,
+          -0.5
+        ]
+      ],
+      "expect": [
+        1.5,
+        2.5,
+        -0.5
+      ],
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "[bool]/nominal",
+      "type": "[bool]",
+      "position": "method_arg,method_return",
+      "method": "echoBoolList",
+      "args": [
+        [
+          true,
+          false,
+          true
+        ]
+      ],
+      "expect": [
+        true,
+        false,
+        true
+      ],
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "[any]/mixed",
+      "type": "[any]",
+      "position": "method_arg,method_return",
+      "method": "echoList",
+      "args": [
+        [
+          1,
+          "two",
+          3.5,
+          {
+            "k": 1
+          },
+          [
+            9
+          ]
+        ]
+      ],
+      "expect": [
+        1,
+        "two",
+        3.5,
+        {
+          "k": 1
+        },
+        [
+          9
+        ]
+      ],
+      "tags": [
+        "nominal"
+      ],
+      "why": "heterogeneous incl. a nested float (exercises float-inside-[any] over cbor)"
+    },
+    {
+      "id": "[any]/empty",
+      "type": "[any]",
+      "position": "method_arg,method_return",
+      "method": "echoList",
+      "args": [
+        []
+      ],
+      "expect": [],
+      "tags": [
+        "empty"
+      ]
+    },
+    {
+      "id": "[any]/uint-max",
+      "type": "[any]",
+      "position": "method_arg,method_return",
+      "method": "echoList",
+      "args": [
+        [
+          18446744073709551615
+        ]
+      ],
+      "expect": [
+        18446744073709551615
+      ],
+      "tags": [
+        "boundary"
+      ],
+      "why": "same cell as [uint]/boundary/max but untyped \u2014 see known.json M1"
+    },
+    {
+      "id": "{tstr:any}/mixed",
+      "type": "{tstr:any}",
+      "position": "method_arg,method_return",
+      "method": "echoMap",
+      "args": [
+        {
+          "s": "v",
+          "n": 42,
+          "f": 1.5,
+          "b": true,
+          "nested": {
+            "x": [
+              1,
+              2
+            ]
+          }
+        }
+      ],
+      "expect": {
+        "s": "v",
+        "n": 42,
+        "f": 1.5,
+        "b": true,
+        "nested": {
+          "x": [
+            1,
+            2
+          ]
+        }
+      },
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "{tstr:any}/empty",
+      "type": "{tstr:any}",
+      "position": "method_arg,method_return",
+      "method": "echoMap",
+      "args": [
+        {}
+      ],
+      "expect": {},
+      "tags": [
+        "empty"
+      ]
+    },
+    {
+      "id": "{tstr:any}/uint-max",
+      "type": "{tstr:any}",
+      "position": "method_arg,method_return",
+      "method": "echoMap",
+      "args": [
+        {
+          "k": 18446744073709551615
+        }
+      ],
+      "expect": {
+        "k": 18446744073709551615
+      },
+      "tags": [
+        "boundary"
+      ],
+      "why": "see known.json M1"
+    },
+    {
+      "id": "result/ok",
+      "type": "result",
+      "position": "method_return",
+      "method": "makeResult",
+      "args": [
+        true
+      ],
+      "expect_by_provider": {
+        "test_fullapi_cpp": {
+          "success": true,
+          "value": {
+            "ok": true,
+            "provider": "test_fullapi_cpp"
+          },
+          "error": null
+        },
+        "test_fullapi_rust": {
+          "success": true,
+          "value": {
+            "ok": true,
+            "provider": "test_fullapi_rust"
+          },
+          "error": null
+        }
+      },
+      "tags": [
+        "nominal"
+      ],
+      "why": "the value carries the provider name, so the two differ by identity, not by shape"
+    },
+    {
+      "id": "result/err",
+      "type": "result",
+      "position": "method_return",
+      "method": "makeResult",
+      "args": [
+        false
+      ],
+      "expect": {
+        "success": false,
+        "value": null,
+        "error": "deliberate error for testing"
+      },
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "void/return",
+      "type": "void",
+      "position": "method_return",
+      "method": "doVoid",
+      "args": [],
+      "expect": true,
+      "tags": [
+        "nominal"
+      ],
+      "why": "both providers now answer the JSON literal true, so the divergence is CLOSED. It was never a disagreement about void \u2014 the Rust backend had no void arm, so `-> void` (which parses as Named(\"void\"), not a builtin) fell to the catch-all and returned JSON null. null is the failure token on the Qt slot above, so core_service reported METHOD_FAILED for a call that had in fact run. Converged in the shared cdylib glue, which now derives the void-method set from the same contract both backends compile, so a third language cannot re-open it. Honest residual: `true` is a fabricated value \u2014 indistinguishable from a real `-> bool` returning true \u2014 and null-as-failure survives untouched underneath. See known.json."
+    },
+    {
+      "id": "arity/triple",
+      "type": "int,tstr,bstr",
+      "position": "method_arg@0,method_arg@1,method_arg@2,method_return",
+      "method": "echoTriple",
+      "args": [
+        -7,
+        "h\u00e9",
+        {
+          "_bytes": "AP8"
+        }
+      ],
+      "expect": "i=-7|s=h\u00e9|b=00ff",
+      "tags": [
+        "nominal",
+        "arity"
+      ],
+      "why": "the contract's only multi-parameter method. Every other one takes 0 or 1 argument, so argument POSITION had no coverage \u2014 nor did a bstr sitting anywhere but first. The digest `i=<dec>|s=<utf8>|b=<hex>` pins each value AND its slot in one comparison: swap two arguments and it changes. A container return would confound slot correctness with container encoding.",
+      "cells": [
+        [
+          "int",
+          "method_arg@0"
+        ],
+        [
+          "tstr",
+          "method_arg@1"
+        ],
+        [
+          "bstr",
+          "method_arg@2"
+        ],
+        [
+          "tstr",
+          "method_return"
+        ]
+      ]
+    },
+    {
+      "id": "arity/triple/boundary",
+      "type": "int,tstr,bstr",
+      "position": "method_arg@0,method_arg@1,method_arg@2,method_return",
+      "method": "echoTriple",
+      "args": [
+        9223372036854775807,
+        "",
+        {
+          "_bytes": ""
+        }
+      ],
+      "expect": "i=9223372036854775807|s=|b=",
+      "tags": [
+        "boundary",
+        "arity"
+      ],
+      "why": "int64max in slot 0 with an empty string and empty bytes after it \u2014 an argument decoder that miscounts positions cannot produce this",
+      "cells": [
+        [
+          "int",
+          "method_arg@0"
+        ],
+        [
+          "tstr",
+          "method_arg@1"
+        ],
+        [
+          "bstr",
+          "method_arg@2"
+        ],
+        [
+          "tstr",
+          "method_return"
+        ]
+      ]
+    },
+    {
+      "id": "hostile/uint/negative",
+      "type": "uint",
+      "position": "method_arg",
+      "method": "echoUint",
+      "args": [
+        -1
+      ],
+      "expect": {
+        "__error__": "dispatch_failed"
+      },
+      "tags": [
+        "hostile"
+      ],
+      "why": "both providers now REJECT a negative for a `uint`, so the divergence is CLOSED. The C++ side used to answer 18446744073709551615: its cdylib dispatch decoded scalars with a bare `.get<uint64_t>()`, which wraps -1 rather than throwing \u2014 a silent sign flip on a nominal value. Fixed by routing every typed scalar through the generated codec AND giving that codec a signedness check; the previous expectation was itself the stated reason the leniency was left in place, which made the argument circular."
+    },
+    {
+      "id": "hostile/int/fractional",
+      "type": "int",
+      "position": "method_arg",
+      "method": "echoInt",
+      "args": [
+        3.7
+      ],
+      "expect": {
+        "__error__": "dispatch_failed"
+      },
+      "tags": [
+        "hostile"
+      ],
+      "why": "both providers now REJECT a fractional value for an `int`, so the divergence is CLOSED. The C++ side used to answer 3: `.get<int64_t>()` TRUNCATES a float rather than throwing. Same root cause and same fix as hostile/uint/negative \u2014 the scalar decoder bypassed the codec that every composite already went through."
+    },
+    {
+      "id": "hostile/bool/one",
+      "type": "bool",
+      "position": "method_arg",
+      "method": "echoBool",
+      "args": [
+        1
+      ],
+      "expect": {
+        "__error__": "dispatch_failed"
+      },
+      "tags": [
+        "hostile"
+      ],
+      "why": "both providers now REJECT an int for a `bool`, so the divergence is CLOSED. The C++ side rejected it before the pin and still does. The Rust side used to answer false, but the coercion was the HOST's: 1 became a bool before the module's LIDL-type validation saw it, so the provider never got the chance to refuse. Pinning logos-protocol 362b03f removed that step and the Rust provider now REJECTS it too \u2014 MEASURED after the pin, not inferred from it. The stricter behaviour is the correct one: a provider should enforce the types its contract declares."
+    },
+    {
+      "id": "hostile/[tstr]/mixed-elements",
+      "type": "[tstr]",
+      "position": "method_arg",
+      "method": "echoStringList",
+      "args": [
+        [
+          "a",
+          1
+        ]
+      ],
+      "expect": {
+        "__error__": "dispatch_failed"
+      },
+      "tags": [
+        "hostile"
+      ],
+      "why": "both providers now REJECT a non-string element in a `[tstr]`, so the divergence is CLOSED. Element-level type checking used to look like a C++-only property. It was not: the HOST coerced the element before the module's LIDL-type validation saw it, so the Rust provider never got the chance to refuse. Pinning logos-protocol 362b03f removed that step and the Rust provider now REJECTS it too \u2014 MEASURED after the pin, not inferred from it. The stricter behaviour is the correct one: a provider should enforce the types its contract declares."
+    },
+    {
+      "id": "hostile/[any]/scalar",
+      "type": "[any]",
+      "position": "method_arg",
+      "method": "echoList",
+      "args": [
+        "notalist"
+      ],
+      "tags": [
+        "hostile"
+      ],
+      "why": "MEASURED again after logos-protocol 362b03f was pinned: the Rust provider now REJECTS this, because the host no longer coerces the value before the module's LIDL-type validation sees it. Both providers used to accept a non-array for `[any]` and echo it back, and that agreement was what this cell pinned; the C++ side still accepts it, so what was an agreement is now a divergence. The stricter behaviour is the correct one: a provider should enforce the types its contract declares. MEASURED AGAIN after the C++ cdylib provider's container decode was made strict (logos-cpp-sdk 853a261 / logos-protocol 0af8e0c): jsonArgToStd used to hand a LogosList/LogosMap parameter the raw JSON, so a scalar reached the impl unchecked. Both providers now refuse, so the divergence this cell recorded is GONE rather than moved, and expect_by_provider collapses to a single expectation. That is the change known.json's Q1b named as the fix \u2014 the entry is retired with it.",
+      "expect": {
+        "__error__": "dispatch_failed"
+      }
+    },
+    {
+      "id": "hostile/{tstr:any}/scalar",
+      "type": "{tstr:any}",
+      "position": "method_arg",
+      "method": "echoMap",
+      "args": [
+        5
+      ],
+      "tags": [
+        "hostile"
+      ],
+      "why": "MEASURED again after logos-protocol 362b03f was pinned: the Rust provider now REJECTS this, because the host no longer coerces the value before the module's LIDL-type validation sees it. The C++ side stays lenient, so the divergence remains \u2014 it just moved. The stricter behaviour is the correct one: a provider should enforce the types its contract declares. MEASURED AGAIN after the C++ cdylib provider's container decode was made strict (logos-cpp-sdk 853a261 / logos-protocol 0af8e0c): jsonArgToStd used to hand a LogosList/LogosMap parameter the raw JSON, so a scalar reached the impl unchecked. Both providers now refuse, so the divergence this cell recorded is GONE rather than moved, and expect_by_provider collapses to a single expectation. That is the change known.json's Q1b named as the fix \u2014 the entry is retired with it.",
+      "expect": {
+        "__error__": "dispatch_failed"
+      }
+    },
+    {
+      "id": "adversarial/any/_bytes-key",
+      "type": "any",
+      "position": "method_arg,method_return",
+      "method": "echoAny",
+      "args": [
+        {
+          "_bytes": "aGk"
+        }
+      ],
+      "expect": {
+        "_bytes": "aGk"
+      },
+      "raw": true,
+      "tags": [
+        "adversarial"
+      ],
+      "why": "`raw: true` means BOTH the argument and the return are observed as data: the driver passes decode_bytes=False so the python client does not materialize the tag on the way back. What this cell proves is that an `any` slot carries the canonical tagged form through the whole system untouched \u2014 on EVERY consumer, the Qt-typed ones included. It does NOT prove the collision is harmless: it is green here because on an `any` slot the map -> QByteArray -> map transformation is its own inverse, so the cell cannot see it. The lossy half is the sibling adversarial/{tstr:any}/_bytes-key, where the slot is typed. See known.json M3 under `xfail`."
+    },
+    {
+      "id": "adversarial/{tstr:any}/_bytes-key",
+      "type": "{tstr:any}",
+      "position": "method_arg,method_return",
+      "method": "echoMap",
+      "args": [
+        {
+          "_bytes": "aGk"
+        }
+      ],
+      "expect": {
+        "_bytes": "aGk"
+      },
+      "raw": true,
+      "tags": [
+        "adversarial"
+      ],
+      "why": "`raw: true` means BOTH the argument and the return are observed as data: the driver passes decode_bytes=False so the python client does not materialize the tag on the way back. This is the TYPED half of the collision, and the half that loses data. `echoMap` declares a map, the incoming one-key `_bytes` map is reinterpreted as a byte string, and coercing that back to a map yields nothing: through qtproxy-sync and qtproxy-async, on both providers, it arrives {} rather than the map that was sent. Through `py` it round-trips intact, which is why one consumer surface was never enough to see it. See known.json M3 under `xfail`, scoped to the two Qt consumers; the sibling adversarial/any/_bytes-key is the green half where the same transformation is its own inverse."
+    },
+    {
+      "id": "adversarial/any/pending-call-key",
+      "type": "any",
+      "position": "method_arg",
+      "method": "echoAny",
+      "args": [
+        {
+          "__logos_pending_call__": 1,
+          "x": 2
+        }
+      ],
+      "expect": {
+        "__logos_pending_call__": 1,
+        "x": 2
+      },
+      "tags": [
+        "adversarial"
+      ],
+      "why": "a user map carrying the deferred-call sentinel KEY alongside other keys. It used to hijack the call \u2014 detection was a bare contains() with no shape check, so the consumer waited in a nested event loop for a completion that never arrives and the call hung for the full timeout. Now it echoes back as the ordinary map it is. See adversarial/any/pending-call-canonical for the half that a shape check cannot fix.",
+      "timeout_ms": 15000
+    },
+    {
+      "id": "bstr/nested/in-map",
+      "type": "bstr",
+      "position": "nested_in_container",
+      "method": "echoMap",
+      "args": [
+        {
+          "k": {
+            "_bytes": "AID_"
+          }
+        }
+      ],
+      "expect": {
+        "k": {
+          "_bytes": "AID_"
+        }
+      },
+      "tags": [
+        "boundary",
+        "bytes-at-depth"
+      ],
+      "why": "the canonical tag exists SPECIFICALLY so a byte >= 0x80 survives; exact as a top-level scalar, and UTF-8 mangled the moment it was nested until the codec unification closed M5 \u2014 see known.json M5 under `fixed`. Green on every surface now, and kept as the regression guard that made it green."
+    },
+    {
+      "id": "bstr/nested/in-list",
+      "type": "bstr",
+      "position": "nested_in_container",
+      "method": "echoList",
+      "args": [
+        [
+          {
+            "_bytes": "AID_"
+          }
+        ]
+      ],
+      "expect": [
+        {
+          "_bytes": "AID_"
+        }
+      ],
+      "tags": [
+        "boundary",
+        "bytes-at-depth"
+      ]
+    },
+    {
+      "id": "bstr/nested/two-deep",
+      "type": "bstr",
+      "position": "nested_in_container",
+      "method": "echoAny",
+      "args": [
+        {
+          "deep": {
+            "k": {
+              "_bytes": "AID_"
+            }
+          }
+        }
+      ],
+      "expect": {
+        "deep": {
+          "k": {
+            "_bytes": "AID_"
+          }
+        }
+      },
+      "tags": [
+        "boundary",
+        "bytes-at-depth"
+      ],
+      "why": "two levels down, to show the loss is not depth-1 specific"
+    },
+    {
+      "id": "hostile/[uint]/negative-element",
+      "type": "[uint]",
+      "position": "method_arg",
+      "method": "echoUintList",
+      "args": [
+        [
+          1,
+          -1,
+          3
+        ]
+      ],
+      "expect": {
+        "__error__": "dispatch_failed"
+      },
+      "tags": [
+        "hostile",
+        "container"
+      ],
+      "why": "the sign flip AT DEPTH. hostile/uint/negative only ever exercised a top-level scalar, and the two decoders were different code: composites already went through the codec while scalars used a bare accessor. A negative buried in a [uint] is the case that tells them apart, and nothing covered it."
+    },
+    {
+      "id": "hostile/[uint]/fractional-element",
+      "type": "[uint]",
+      "position": "method_arg",
+      "method": "echoUintList",
+      "args": [
+        [
+          1,
+          2.5,
+          3
+        ]
+      ],
+      "expect": {
+        "__error__": "dispatch_failed"
+      },
+      "tags": [
+        "hostile",
+        "container"
+      ],
+      "why": "a fractional element inside a [uint] \u2014 the container twin of hostile/int/fractional."
+    },
+    {
+      "id": "hostile/[int]/fractional-element",
+      "type": "[int]",
+      "position": "method_arg",
+      "method": "echoIntList",
+      "args": [
+        [
+          1,
+          3.7,
+          3
+        ]
+      ],
+      "expect": {
+        "__error__": "dispatch_failed"
+      },
+      "tags": [
+        "hostile",
+        "container"
+      ],
+      "why": "a float where the contract declares [int]; must be rejected rather than truncated."
+    },
+    {
+      "id": "adversarial/any/pending-call-canonical",
+      "type": "any",
+      "position": "method_arg",
+      "method": "echoAny",
+      "args": [
+        {
+          "__logos_pending_call__": "lc-0"
+        }
+      ],
+      "expect": {
+        "__logos_pending_call__": "lc-0"
+      },
+      "tags": [
+        "adversarial"
+      ],
+      "why": "the RESIDUAL of M4, kept measurable instead of implied. One key, string value \u2014 the canonical sentinel shape, so no shape check can tell it from the real thing. The call still does not return the map. Worse than a hang: call ids are a per-object counter starting at 0, so a forged \"lc-0\" can collide with a genuine in-flight completion. Registered under M4-residual; the expectation is deliberately loose because the FAILURE is the point, not its exact shape.",
+      "timeout_ms": 15000
+    },
+    {
+      "id": "failure/A/module-not-loaded",
+      "type": "int",
+      "position": "method_arg",
+      "method": "echoInt",
+      "args": [
+        7
+      ],
+      "module": "ghost_module",
+      "isolate": true,
+      "expect": {
+        "__error__": "MODULE_NOT_LOADED"
+      },
+      "tags": [
+        "failure-class",
+        "transport",
+        "adversarial"
+      ],
+      "why": "CLASS A, and the anchor the other three classes are read against: a call that did not reach a provider must say so on the ERROR CHANNEL, never by returning a value. `module` re-targets this one case at a module that was never loaded, because \"the module is not there\" cannot be said by naming a method. The answer is IDENTICAL on every provider and every consumer, and that is the point: the call never reaches either, so a coordinate that answers differently is measuring something it should not be able to see.\n\nTHE CODE IS A SINGLE TOKEN AGAIN, and both the widening and the cost that forced it are gone. This cell used to accept a LIST -- object_unavailable or RPC_FAILED -- because the answer was decided by which of two independent 20s budgets fired first: the client's RPC and the daemon's own call to the module, each default-constructed from logos-protocol cpp/logos_mode.h rather than threaded through. Equal budgets in two processes cannot reliably order, so the token was a photo finish (measured 8 RPC_FAILED / 2 object_unavailable over ten runs, every sample inside 19678-19806ms, interleaved rather than split at a threshold), and asserting one token asserted the timing.\n\nlogos-logoscore-cli now answers from the host's LOADED SET instead of from a socket probe -- the fix the previous version of this note prescribed. CoreServiceImpl::callModuleMethod gates on getLoadedModuleNames() before it acquires, so a name the daemon never brought up is refused immediately and specifically. The claim is therefore STRONGER than the list it replaces: one token, identical across coordinates, and no longer a timing assertion.\n\n`isolate` and `timeout_ms` are GONE with the 20s they existed to contain. The case answers in milliseconds, so it neither needs the driver's patience raised above its 20s default nor leaks a 20s cost into the calls that follow it. Note the token comes from the envelope's top-level `code`: this envelope carries no nested `error` object, so error_code_of() falls through to it, which is the fallback its docstring already describes. The exit code moves 4 -> 3 with it.\n\nA cell that answers with a VALUE, or with a provider-side code such as dispatch_failed, still fails."
+    },
+    {
+      "id": "failure/B/arity/too-few",
+      "type": "int",
+      "position": "method_arg",
+      "method": "echoInt",
+      "args": [],
+      "isolate": true,
+      "expect": {
+        "__error__": "invalid_args"
+      },
+      "tags": [
+        "failure-class",
+        "arity",
+        "hostile"
+      ],
+      "why": "CLASS B: the provider RAN and refused the argument COUNT, which is a different event from refusing the argument VALUES (class E, `dispatch_failed`) and from never arriving (class A). Both codes reach the caller as the same METHOD_FAILED envelope, so this cell and hostile/int/fractional are only distinguishable if the driver reads the envelope's nested error.code \u2014 that pair is the reason it does. MEASURED AT THIS BASE the cell PASSES on all six coordinates, and it is the only one of the eight that does: `args.size() < minArgs` reached the C++ cdylib dispatch (logos-cpp-sdk 44b92b0, #127) and the qtproxy's provider half became a cdylib decode, so both the missing guard and the 20s wedge that used to follow it are gone. It is kept, unregistered, as the regression guard for both \u2014 and `isolate` is kept with it, because what it used to do was not fail but KILL: it hung 20s and left test_fullapi_qtproxy object_unavailable for the life of that daemon, turning every case after it in the same block red for a reason that had nothing to do with those cases. A guard that costs one daemon is the right price for never having to diagnose that twice."
+    },
+    {
+      "id": "failure/B/arity/too-many",
+      "type": "int",
+      "position": "method_arg",
+      "method": "echoInt",
+      "args": [
+        1,
+        2
+      ],
+      "isolate": true,
+      "expect": {
+        "__error__": "invalid_args"
+      },
+      "tags": [
+        "failure-class",
+        "arity",
+        "hostile"
+      ],
+      "why": "The other side of the count, and the side nothing tested: an EXTRA argument is silently DROPPED and the call succeeds. Both generated dispatches guard `args.size() < minArgs` and neither has an upper bound, so `echoInt(1, 2)` answers 1 with status ok on both providers and through both Qt tables. A caller that misreads a contract \u2014 one parameter added upstream, one removed downstream \u2014 gets a plausible answer instead of a refusal, which is the failure mode a type contract exists to prevent. `isolate` for the reason THE ISOLATE RULE in this table's comment states."
+    },
+    {
+      "id": "failure/B/arity/too-many-untyped-extra",
+      "type": "int",
+      "position": "method_arg",
+      "method": "echoInt",
+      "args": [
+        1,
+        "junk"
+      ],
+      "isolate": true,
+      "expect": {
+        "__error__": "invalid_args"
+      },
+      "tags": [
+        "failure-class",
+        "arity",
+        "hostile"
+      ],
+      "why": "The extra argument is not merely accepted, it is not even LOOKED AT: a string in an int method's second slot is dropped without a type check, so this cell separates \"dropped\" from \"coerced\". It also separates two candidate fixes \u2014 counting the arguments turns this and failure/B/arity/too-many green together, while type-checking every argument supplied would turn only this one green and leave a well-typed extra still silently accepted. `isolate` for the reason THE ISOLATE RULE in this table's comment states."
+    },
+    {
+      "id": "failure/B/arity/too-many-zero-parameter",
+      "type": "void",
+      "position": "method_return",
+      "method": "doVoid",
+      "args": [
+        "junk"
+      ],
+      "isolate": true,
+      "expect": {
+        "__error__": "invalid_args"
+      },
+      "tags": [
+        "failure-class",
+        "arity",
+        "hostile"
+      ],
+      "why": "The zero-parameter path is a DIFFERENT code path, not the same guard with minArgs = 0: the generator emits no arity guard at all when a method declares no parameters, so there is nothing there to widen. A fix that changes `<` to `!=` in the existing guard closes failure/B/arity/too-many and leaves this cell exactly as it is, which is why it is written separately rather than folded into that case. `isolate` for the reason THE ISOLATE RULE in this table's comment states."
+    },
+    {
+      "id": "failure/B/arity/too-many-lidl-builtin",
+      "type": "tstr",
+      "position": "method_return",
+      "method": "lidl",
+      "args": [
+        "junk"
+      ],
+      "isolate": true,
+      "expect": {
+        "__error__": "invalid_args"
+      },
+      "tags": [
+        "failure-class",
+        "arity",
+        "hostile"
+      ],
+      "why": "The zero-parameter method no contract declares. `lidl()` is generator-owned, and logos-plugin-qt's cdylib glue answers it before the module's dispatch runs, so the arity guards the generated dispatches carry never see this call. The glue's own check returned an empty QVariant, so `lidl(\"junk\")` answered null with status ok while `name(\"junk\")` and `version(\"junk\")` were refused. On a proxy consumer the call lands on the proxy's own built-in, which is the same glue. `isolate` for the reason THE ISOLATE RULE in this table's comment states."
+    },
+    {
+      "id": "failure/C/unknown-method",
+      "type": "any",
+      "position": "method_return",
+      "method": "noSuchMethod",
+      "args": [],
+      "isolate": true,
+      "expect": {
+        "__error__": "METHOD_NOT_FOUND"
+      },
+      "tags": [
+        "failure-class",
+        "adversarial"
+      ],
+      "why": "CLASS C, and the cell that says where the answer comes from. On the wire an unknown method NAME is a bare null with LP_OK \u2014 logos-protocol cpp/logos_protocol.h says so in as many words, the cdylib dispatch ends in `return nullptr; // unknown method`, and logos-protocol tests/protocol/test_call_error_after_acquire.cpp:391 pins it \u2014 so it is byte-identical to failure/D/null-is-a-value and no transport, no error channel and no rejection detector can separate them. What separates them here is OUT OF BAND: on a null return the daemon asks the module for its method list and answers METHOD_NOT_FOUND when the name is absent. Asserting the code rather than \"some error\" is the whole content of the cell \u2014 a bare METHOD_FAILED would prove only that something went wrong, which is what the wire already says about an empty answer. `isolate` for the reason THE ISOLATE RULE in this table's comment states."
+    },
+    {
+      "id": "failure/C/identity-arity-is-a-bare-null",
+      "type": "tstr",
+      "position": "method_return",
+      "method": "version",
+      "args": [
+        "junk"
+      ],
+      "isolate": true,
+      "expect": {
+        "__error__": "invalid_args"
+      },
+      "tags": [
+        "failure-class",
+        "arity",
+        "adversarial"
+      ],
+      "why": "MEASURED AT THIS BASE, and it no longer answers a bare null: `version(\"junk\")` returns \"1.0.0\" with status ok, on both providers and all three consumers. The case is kept under its class-C id because it is the same probe and the question is the same one \u2014 can a caller tell an undispatchable call from an answer? \u2014 but the ANSWER changed class, from C to B, and the id is now history rather than description. What it used to measure: `version` was dispatched by the Qt QMetaObject path, which matches on name AND parameterCount together (logos-plugin-qt cpp/qt_provider_object.cpp:347-361), so one extra argument fell into the same `methodIndex == -1` -> bare null branch as an unknown name \u2014 while `getPluginMethods` still listed `version`, so nothing could ask its way out. That path left the fixture when the identity methods moved into the cdylib dispatch (logos-test-modules 3b6bf85), and the extra argument is now simply DROPPED like every other class-B overflow. The caller still gets a successful call it should not have got; it now gets a plausible value instead of nothing, which is the worse of the two. Registered under B-arity-overflow-identity, not with the contract methods, because the identity dispatch is generated separately and an arity guard added to the contract-method generator would not reach it. `isolate` for the reason THE ISOLATE RULE in this table's comment states."
+    },
+    {
+      "id": "failure/D/null-is-a-value",
+      "type": "any",
+      "position": "method_arg,method_return",
+      "method": "echoAny",
+      "args": [
+        null
+      ],
+      "isolate": true,
+      "expect": null,
+      "tags": [
+        "failure-class",
+        "empty",
+        "nominal"
+      ],
+      "why": "CLASS D, and the twin of failure/C/unknown-method: the same bytes, and the answer that must NOT be read as a failure. `any` holds null legitimately, so a caller that infers failure from a null RESULT breaks this cell and every empty optional with it \u2014 which is exactly what happened on the py path, and what known-ext.json's OPT2 records for the `?tstr` spelling of the same value. Written in the full_api table as well as the ext one because the defect was never about optionality: it was about a value being read as a verdict. `isolate` is not in the original spelling of this case and was added on MEASUREMENT, and it is the clearest argument in the table for the flag existing: without it the four qtproxy cells answered RPC_FAILED, METHOD_FAILED and TimeoutExpired with the module left call_status=unavailable, which was written up as a Qt-hop defect; with it, and nothing else changed, all four answer the same METHOD_FAILED the direct client does and the six differential rows vanish. The case is LAST in this array, so the sixty-eight cases before it were what it was actually measuring."
+    }
+  ],
+  "events": [
+    {
+      "id": "event/tstr",
+      "type": "tstr",
+      "position": "event_param",
+      "event": "stringEvent",
+      "fire": "fireStringEvent",
+      "value": "hello"
+    },
+    {
+      "id": "event/bstr",
+      "type": "bstr",
+      "position": "event_param",
+      "event": "bytesEvent",
+      "fire": "fireBytesEvent",
+      "value": {
+        "_bytes": "AQID_w"
+      }
+    },
+    {
+      "id": "event/bstr/nul",
+      "type": "bstr",
+      "position": "event_param",
+      "event": "bytesEvent",
+      "fire": "fireBytesEvent",
+      "value": {
+        "_bytes": "YQBi"
+      }
+    },
+    {
+      "id": "event/int",
+      "type": "int",
+      "position": "event_param",
+      "event": "intEvent",
+      "fire": "fireIntEvent",
+      "value": -42
+    },
+    {
+      "id": "event/int/boundary",
+      "type": "int",
+      "position": "event_param",
+      "event": "intEvent",
+      "fire": "fireIntEvent",
+      "value": 9007199254740993
+    },
+    {
+      "id": "event/int/boundary/min",
+      "type": "int",
+      "position": "event_param",
+      "event": "intEvent",
+      "fire": "fireIntEvent",
+      "value": -9223372036854775808
+    },
+    {
+      "id": "event/uint",
+      "type": "uint",
+      "position": "event_param",
+      "event": "uintEvent",
+      "fire": "fireUintEvent",
+      "value": 7
+    },
+    {
+      "id": "event/uint/boundary",
+      "type": "uint",
+      "position": "event_param",
+      "event": "uintEvent",
+      "fire": "fireUintEvent",
+      "value": 18446744073709551615
+    },
+    {
+      "id": "event/float64",
+      "type": "float64",
+      "position": "event_param",
+      "event": "doubleEvent",
+      "fire": "fireDoubleEvent",
+      "value": 2.5
+    },
+    {
+      "id": "event/bool",
+      "type": "bool",
+      "position": "event_param",
+      "event": "boolEvent",
+      "fire": "fireBoolEvent",
+      "value": true
+    },
+    {
+      "id": "event/any",
+      "type": "any",
+      "position": "event_param",
+      "event": "anyEvent",
+      "fire": "fireAnyEvent",
+      "value": {
+        "k": "v",
+        "n": 1
+      }
+    },
+    {
+      "id": "event/[tstr]",
+      "type": "[tstr]",
+      "position": "event_param",
+      "event": "stringListEvent",
+      "fire": "fireStringListEvent",
+      "value": [
+        "p",
+        "q"
+      ]
+    },
+    {
+      "id": "event/[tstr]/empty",
+      "type": "[tstr]",
+      "position": "event_param",
+      "event": "stringListEvent",
+      "fire": "fireStringListEvent",
+      "value": []
+    },
+    {
+      "id": "event/[int]",
+      "type": "[int]",
+      "position": "event_param",
+      "event": "intListEvent",
+      "fire": "fireIntListEvent",
+      "value": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "id": "event/[uint]",
+      "type": "[uint]",
+      "position": "event_param",
+      "event": "uintListEvent",
+      "fire": "fireUintListEvent",
+      "value": [
+        4,
+        5
+      ]
+    },
+    {
+      "id": "event/[float64]",
+      "type": "[float64]",
+      "position": "event_param",
+      "event": "doubleListEvent",
+      "fire": "fireDoubleListEvent",
+      "value": [
+        1.5,
+        2.5
+      ]
+    },
+    {
+      "id": "event/[bool]",
+      "type": "[bool]",
+      "position": "event_param",
+      "event": "boolListEvent",
+      "fire": "fireBoolListEvent",
+      "value": [
+        true,
+        false
+      ]
+    },
+    {
+      "id": "event/[any]",
+      "type": "[any]",
+      "position": "event_param",
+      "event": "listEvent",
+      "fire": "fireListEvent",
+      "value": [
+        1,
+        "two",
+        {
+          "k": 1
+        }
+      ]
+    },
+    {
+      "id": "event/{tstr:any}",
+      "type": "{tstr:any}",
+      "position": "event_param",
+      "event": "mapEvent",
+      "fire": "fireMapEvent",
+      "value": {
+        "mk": "mv"
+      }
+    },
+    {
+      "id": "event/arity/triple",
+      "type": "int,tstr,bstr",
+      "position": "event_param@0,event_param@1,event_param@2",
+      "event": "tripleEvent",
+      "fire": "fireTripleEvent",
+      "values": [
+        -7,
+        "h\u00e9",
+        {
+          "_bytes": "AP8"
+        }
+      ],
+      "cells": [
+        [
+          "int",
+          "event_param@0"
+        ],
+        [
+          "tstr",
+          "event_param@1"
+        ],
+        [
+          "bstr",
+          "event_param@2"
+        ]
+      ]
+    }
+  ]
+}

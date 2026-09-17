@@ -1,0 +1,1188 @@
+{
+  "schema": 1,
+  "contract": "full_api_ext",
+  "comment": [
+    "The composite tail of the matrix: records, bytes at depth, typed maps and",
+    "nested composites. A SEPARATE table because these types have a separate",
+    "contract \u2014 and, when it was split, because the C++ cdylib backend's",
+    "typeSupported() gate rejected records and [bstr] by name and its impl-header",
+    "parser skipped `struct` entirely, so a header-first C++ provider could not even",
+    "declare a record. Putting them in full_api would have broken test_fullapi_cpp's",
+    "build rather than added a test.",
+    "",
+    "logos-cpp-sdk#125 lifted that gate. Both providers implement this table now \u2014",
+    "the C++ one header-first (its records are declared as C++ structs and the",
+    "contract is derived from them), the Rust one contract-first \u2014 so it carries a",
+    "provider differential like full_api does. The tables stay split because each is",
+    "a frozen contract, not because a backend cannot express one.",
+    "",
+    "THE CONSUMER AXIS. It used to be one point (py) with no proxy, which meant",
+    "everything the lossless Qt mapping widened lived in this contract and was",
+    "measured by nobody: records, [Blob], {tstr: Blob}, [bstr], [[int]],",
+    "{tstr: [bstr]} and ?tstr have no spelling in full_api at all, so the two",
+    "qtproxy consumer points on that table cannot reach them. test_fullapi_ext_qtproxy",
+    "closes it \u2014 the same two-key shape as test_fullapi_qtproxy (universal provider,",
+    "codegen.consumer_api_style: qt) against full_api_ext \u2014 and the table now runs",
+    "44 cases x 2 providers x 3 consumers, matching cases.json \u2014 and then 45,",
+    "because probing the nested widened containers by hand found a hole the table",
+    "did not have a case for: [[int]]/out-of-signed-range. It is registered against",
+    "one provider, and the two proxy points PASS it, which is the consumer axis",
+    "earning its keep in the other direction \u2014 the hop hides a provider defect, and",
+    "only a table with both surfaces on it can say so.",
+    "",
+    "A proxy cell is a ROUND TRIP, so a transformation that is its own inverse stays",
+    "invisible; what it catches is a LOSSY step. And a red proxy cell is not",
+    "automatically the consumer's fault \u2014 it adds a hop. That is what the consumer",
+    "differential is for: it names the pair.",
+    "",
+    "Every expectation was MEASURED against the providers, not assumed.",
+    "",
+    "OPTIONALITY (the `Optional/` and `hostile/Optional/` family). `?T` is",
+    "TWO-state: a value of T, or empty. Omitted and explicit-null are the SAME",
+    "state on decode and DIFFERENT on encode \u2014 empty is spelled by OMITTING the",
+    "key in a NAMED slot (a record field) and by null in a POSITIONAL one (a",
+    "method arg, a return), because a positional slot has no key to omit and the",
+    "arity must never change. The round trip is therefore CANONICALISING, not",
+    "identity, and several expectations below are deliberately NOT the argument",
+    "echoed back.",
+    "",
+    "This family was written contract-first \u2014 derived from the LIDL before any",
+    "generator read `?T`, so at the time it was red on purpose and every cell that",
+    "could not pass was registered. Optionality has since landed (known-ext.json",
+    "fixed[].OPT1) and the family is measured against both providers like the rest",
+    "of this table. OPT2 is the one cell still registered."
+  ],
+  "providers": [
+    "test_fullapi_ext_rust",
+    "test_fullapi_ext_cpp"
+  ],
+  "cases": [
+    {
+      "id": "identity/whoami",
+      "type": "tstr",
+      "position": "method_return",
+      "method": "whoAmI",
+      "args": [],
+      "tags": [
+        "nominal"
+      ],
+      "expect_by_provider": {
+        "test_fullapi_ext_rust": "test_fullapi_ext_rust",
+        "test_fullapi_ext_cpp": "test_fullapi_ext_cpp"
+      }
+    },
+    {
+      "id": "Record/nominal",
+      "type": "Blob",
+      "position": "method_arg,method_return",
+      "method": "echoBlob",
+      "args": [
+        {
+          "id": "x",
+          "n": 42,
+          "payload": {
+            "_bytes": "aGk"
+          }
+        }
+      ],
+      "expect": {
+        "id": "x",
+        "n": 42,
+        "payload": {
+          "_bytes": "aGk"
+        }
+      },
+      "tags": [
+        "nominal",
+        "record"
+      ],
+      "why": "a record reaches the Rust author as a real struct; the round trip goes through the generated to_json/from_json, so this passing means BOTH directions encode the fields"
+    },
+    {
+      "id": "Record/bstr-field",
+      "type": "Blob",
+      "position": "record_field",
+      "method": "echoBlob",
+      "args": [
+        {
+          "id": "x",
+          "n": 42,
+          "payload": {
+            "_bytes": "AID_"
+          }
+        }
+      ],
+      "expect": {
+        "id": "x",
+        "n": 42,
+        "payload": {
+          "_bytes": "AID_"
+        }
+      },
+      "tags": [
+        "boundary",
+        "record",
+        "bytes-at-depth"
+      ],
+      "why": "a bstr FIELD with bytes >= 0x80 \u2014 the reason records get hand-emitted to_json instead of a serde derive. See known-ext.json E1."
+    },
+    {
+      "id": "Record/uint-field/boundary",
+      "type": "Blob",
+      "position": "record_field",
+      "method": "echoBlob",
+      "args": [
+        {
+          "id": "x",
+          "n": 18446744073709551615,
+          "payload": {
+            "_bytes": ""
+          }
+        }
+      ],
+      "expect": {
+        "id": "x",
+        "n": 18446744073709551615,
+        "payload": {
+          "_bytes": ""
+        }
+      },
+      "tags": [
+        "boundary",
+        "record"
+      ],
+      "why": "M1 seen through a record field. The provider used to reject it with `expected integer at arg0.n, got number` \u2014 the field-path diagnostic was itself worth pinning \u2014 until the codec unification closed E3. Both providers now round-trip it, and this cell is the regression guard that keeps them doing so."
+    },
+    {
+      "id": "Record/empty-strings",
+      "type": "Blob",
+      "position": "record_field",
+      "method": "echoBlob",
+      "args": [
+        {
+          "id": "",
+          "n": 0,
+          "payload": {
+            "_bytes": ""
+          }
+        }
+      ],
+      "expect": {
+        "id": "",
+        "n": 0,
+        "payload": {
+          "_bytes": ""
+        }
+      },
+      "tags": [
+        "empty",
+        "record"
+      ]
+    },
+    {
+      "id": "Record-in-Record",
+      "type": "Wrapper",
+      "position": "method_arg,method_return,record_field",
+      "method": "echoWrapper",
+      "args": [
+        {
+          "inner": {
+            "id": "i",
+            "n": 1,
+            "payload": {
+              "_bytes": "aGk"
+            }
+          },
+          "tags": [
+            "a",
+            "b"
+          ],
+          "blobs": [
+            {
+              "id": "b0",
+              "n": 2,
+              "payload": {
+                "_bytes": "Ynll"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "inner": {
+          "id": "i",
+          "n": 1,
+          "payload": {
+            "_bytes": "aGk"
+          }
+        },
+        "tags": [
+          "a",
+          "b"
+        ],
+        "blobs": [
+          {
+            "id": "b0",
+            "n": 2,
+            "payload": {
+              "_bytes": "Ynll"
+            }
+          }
+        ]
+      },
+      "tags": [
+        "nominal",
+        "record"
+      ],
+      "why": "a record holding a record, a [tstr] and a [Record] \u2014 the recursion the generated encoders have to get right"
+    },
+    {
+      "id": "[Record]/nominal",
+      "type": "[Blob]",
+      "position": "method_arg,method_return",
+      "method": "echoBlobList",
+      "args": [
+        [
+          {
+            "id": "a",
+            "n": 1,
+            "payload": {
+              "_bytes": "aGk"
+            }
+          },
+          {
+            "id": "b",
+            "n": 2,
+            "payload": {
+              "_bytes": ""
+            }
+          }
+        ]
+      ],
+      "expect": [
+        {
+          "id": "a",
+          "n": 1,
+          "payload": {
+            "_bytes": "aGk"
+          }
+        },
+        {
+          "id": "b",
+          "n": 2,
+          "payload": {
+            "_bytes": ""
+          }
+        }
+      ],
+      "tags": [
+        "nominal",
+        "record"
+      ]
+    },
+    {
+      "id": "[Record]/empty",
+      "type": "[Blob]",
+      "position": "method_arg,method_return",
+      "method": "echoBlobList",
+      "args": [
+        []
+      ],
+      "expect": [],
+      "tags": [
+        "empty",
+        "record"
+      ]
+    },
+    {
+      "id": "{tstr:Record}/nominal",
+      "type": "{tstr:Blob}",
+      "position": "method_arg,method_return",
+      "method": "echoBlobMap",
+      "args": [
+        {
+          "k": {
+            "id": "a",
+            "n": 1,
+            "payload": {
+              "_bytes": "aGk"
+            }
+          }
+        }
+      ],
+      "expect": {
+        "k": {
+          "id": "a",
+          "n": 1,
+          "payload": {
+            "_bytes": "aGk"
+          }
+        }
+      },
+      "tags": [
+        "nominal",
+        "record"
+      ],
+      "why": "codegen types [Record] but NOT {tstr: Record}, so this one arrives untyped \u2014 which is exactly why it is a separate cell"
+    },
+    {
+      "id": "[bstr]/nominal",
+      "type": "[bstr]",
+      "position": "method_arg,method_return",
+      "method": "echoBytesList",
+      "args": [
+        [
+          {
+            "_bytes": "aGk"
+          },
+          {
+            "_bytes": "_w"
+          }
+        ]
+      ],
+      "expect": [
+        {
+          "_bytes": "aGk"
+        },
+        {
+          "_bytes": "_w"
+        }
+      ],
+      "tags": [
+        "nominal",
+        "bytes-at-depth"
+      ],
+      "why": "the type the C++ cdylib gate USED TO reject by name, which is why this cell was born on the Rust side of the split (logos-cpp-sdk#125 lifted the gate). Both providers express it now."
+    },
+    {
+      "id": "[bstr]/empty-element",
+      "type": "[bstr]",
+      "position": "method_arg,method_return",
+      "method": "echoBytesList",
+      "args": [
+        [
+          {
+            "_bytes": ""
+          }
+        ]
+      ],
+      "expect": [
+        {
+          "_bytes": ""
+        }
+      ],
+      "tags": [
+        "empty",
+        "bytes-at-depth"
+      ]
+    },
+    {
+      "id": "{tstr:bstr}/nominal",
+      "type": "{tstr:bstr}",
+      "position": "method_arg,method_return",
+      "method": "echoBytesMap",
+      "args": [
+        {
+          "k": {
+            "_bytes": "AID_"
+          }
+        }
+      ],
+      "expect": {
+        "k": {
+          "_bytes": "AID_"
+        }
+      },
+      "tags": [
+        "boundary",
+        "bytes-at-depth"
+      ]
+    },
+    {
+      "id": "{tstr:[bstr]}/nested",
+      "type": "{tstr:[bstr]}",
+      "position": "method_arg,method_return",
+      "method": "echoMapOfBytesLists",
+      "args": [
+        {
+          "k": [
+            {
+              "_bytes": "aGk"
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "k": [
+          {
+            "_bytes": "aGk"
+          }
+        ]
+      },
+      "tags": [
+        "nominal",
+        "bytes-at-depth"
+      ],
+      "why": "bytes two containers deep"
+    },
+    {
+      "id": "{tstr:int}/nominal",
+      "type": "{tstr:int}",
+      "position": "method_arg,method_return",
+      "method": "echoIntMap",
+      "args": [
+        {
+          "a": -1,
+          "b": 9007199254740993
+        }
+      ],
+      "expect": {
+        "a": -1,
+        "b": 9007199254740993
+      },
+      "tags": [
+        "boundary"
+      ],
+      "why": "a TYPED map, and its values carry the 64-bit range"
+    },
+    {
+      "id": "{tstr:int}/empty",
+      "type": "{tstr:int}",
+      "position": "method_arg,method_return",
+      "method": "echoIntMap",
+      "args": [
+        {}
+      ],
+      "expect": {},
+      "tags": [
+        "empty"
+      ]
+    },
+    {
+      "id": "{tstr:tstr}/nominal",
+      "type": "{tstr:tstr}",
+      "position": "method_arg,method_return",
+      "method": "echoStringMap",
+      "args": [
+        {
+          "a": "x",
+          "b": ""
+        }
+      ],
+      "expect": {
+        "a": "x",
+        "b": ""
+      },
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "[[int]]/nominal",
+      "type": "[[int]]",
+      "position": "method_arg,method_return",
+      "method": "echoNestedInts",
+      "args": [
+        [
+          [
+            1,
+            2
+          ],
+          [
+            3
+          ]
+        ]
+      ],
+      "expect": [
+        [
+          1,
+          2
+        ],
+        [
+          3
+        ]
+      ],
+      "tags": [
+        "nominal"
+      ]
+    },
+    {
+      "id": "[[int]]/empty-inner",
+      "type": "[[int]]",
+      "position": "method_arg,method_return",
+      "method": "echoNestedInts",
+      "args": [
+        [
+          [],
+          []
+        ]
+      ],
+      "expect": [
+        [],
+        []
+      ],
+      "tags": [
+        "empty"
+      ],
+      "why": "an empty inner array is where an element type gets lost"
+    },
+    {
+      "id": "[[int]]/out-of-signed-range",
+      "type": "[[int]]",
+      "position": "method_arg",
+      "method": "echoNestedInts",
+      "args": [
+        [
+          [
+            18446744073709551615
+          ]
+        ]
+      ],
+      "expect": {
+        "__error__": "dispatch_failed"
+      },
+      "tags": [
+        "hostile",
+        "boundary"
+      ],
+      "why": "`int` is i64 and `uint` is u64 \u2014 one LIDL type, one range, and this table already pins the u64 end separately (Record/uint-field/boundary echoes 18446744073709551615 in a `uint` FIELD and must). 2^64-1 in an `int` slot is therefore out of range and must be rejected, at depth as much as at the top: the range check is the element loop's job and an inner array is exactly where a per-element check gets skipped. The expectation is not derived from the contract alone \u2014 test_fullapi_ext_cpp already answers `expected signed integer in range at arg0[0][0], got number`, naming the coordinate, so this cell asks the other provider for the answer one provider already gives."
+    },
+    {
+      "id": "bool/fire-return",
+      "type": "bool",
+      "position": "method_return",
+      "method": "fireBlobEvent",
+      "args": [
+        {
+          "id": "e",
+          "n": 7,
+          "payload": {
+            "_bytes": "aGk"
+          }
+        }
+      ],
+      "expect": true,
+      "tags": [
+        "nominal"
+      ],
+      "why": "the fire shim's bool return is a declared cell \u2014 the event case covers the payload, not this"
+    },
+    {
+      "id": "bstr/padded-base64",
+      "type": "bstr",
+      "position": "record_field",
+      "method": "echoBlob",
+      "args": [
+        {
+          "id": "x",
+          "n": 1,
+          "payload": {
+            "_bytes": "Zm9vYg=="
+          }
+        }
+      ],
+      "raw": true,
+      "expect": {
+        "id": "x",
+        "n": 1,
+        "payload": {
+          "_bytes": "Zm9vYg"
+        }
+      },
+      "tags": [
+        "boundary",
+        "bytes-at-depth"
+      ],
+      "why": "PADDED base64 in a canonical tag, MEASURED: both providers decode it correctly on this path and re-emit the canonical unpadded form. Recorded because nothing covered padded input anywhere \u2014 every other bytes cell sends unpadded \u2014 and because the cdylib backend carries a SECOND byte decoder that bails on any non-alphabet character, returning an empty vector with no error. That decoder is not on this record-field path, so this cell is a regression guard for the codec unification rather than a baseline for a live defect. I predicted it would fail here and it did not; the expectation is what was measured."
+    },
+    {
+      "id": "[bstr]/lenient-plain-string",
+      "type": "[bstr]",
+      "position": "method_arg",
+      "method": "echoBytesList",
+      "args": [
+        [
+          "hi"
+        ]
+      ],
+      "expect_by_provider": {
+        "test_fullapi_ext_rust": [
+          "hi"
+        ],
+        "test_fullapi_ext_cpp": [
+          {
+            "_bytes": "aGk"
+          }
+        ]
+      },
+      "tags": [
+        "boundary",
+        "bytes-at-depth",
+        "divergence"
+      ],
+      "why": "a plain string where the contract says [bstr]. Both providers now ACCEPT it \u2014 the divergence that mattered is closed. Before the codec unification the C++ side refused, because a [bstr] ELEMENT went through the strict codec the cdylib backend emitted while a SCALAR bstr went through a lenient one: echoBytes(\"hi\") succeeded and echoBytesList([\"hi\"]) threw, inside one module, for the same type. One function now.\nStill pinned per provider because the ECHOED FORM differs, and that is not the same defect: C++ decodes to real bytes and re-emits the canonical tag, while Rust binds [bstr] as an untyped Value and echoes the input verbatim. A representation difference from an untyped binding, not a disagreement about what the value is."
+    },
+    {
+      "id": "Optional/record/all-present",
+      "type": "Opt",
+      "position": "method_arg,method_return",
+      "method": "echoOpt",
+      "args": [
+        {
+          "required": "r",
+          "maybe": "m",
+          "count": 7,
+          "blob": {
+            "_bytes": "aGk"
+          }
+        }
+      ],
+      "expect": {
+        "required": "r",
+        "maybe": "m",
+        "count": 7,
+        "blob": {
+          "_bytes": "aGk"
+        }
+      },
+      "tags": [
+        "nominal",
+        "optional",
+        "record"
+      ],
+      "why": "the baseline: every optional field carries a VALUE, so nothing about optionality is exercised except that declaring it did not change the ordinary path. If this cell ever diverges from Record/nominal, optional support broke the case that was already working."
+    },
+    {
+      "id": "Optional/record/all-absent",
+      "type": "Opt",
+      "position": "record_field",
+      "method": "echoOpt",
+      "args": [
+        {
+          "required": "r"
+        }
+      ],
+      "expect": {
+        "required": "r"
+      },
+      "tags": [
+        "optional",
+        "record",
+        "empty"
+      ],
+      "why": "absent decodes to EMPTY \u2014 not an error, not a default \u2014 and empty re-encodes by OMITTING the key, because a named slot has a key to leave out and that is the one canonical spelling. The echo must come back with exactly one key. Two wrong answers this catches: {\"required\":\"r\",\"maybe\":null,\u2026}, i.e. empty spelled as null in a NAMED slot (a second wire form the contract does not have), and a rejection \u2014 which is what the Rust provider answered before Ty::Opt landed, `expected string at arg0.maybe, got null`, because args::Ty::Record typed a flag-optional field by its base type. Both are still the guard."
+    },
+    {
+      "id": "Optional/record/explicit-null",
+      "type": "Opt",
+      "position": "record_field",
+      "method": "echoOpt",
+      "args": [
+        {
+          "required": "r",
+          "maybe": null,
+          "count": null,
+          "blob": null
+        }
+      ],
+      "expect": {
+        "required": "r"
+      },
+      "tags": [
+        "optional",
+        "record",
+        "empty"
+      ],
+      "why": "omitted and explicit-null are the SAME state on decode and DIFFERENT on encode, so the round trip is CANONICALISING rather than identity: null in, key gone out. This cell pins that asymmetry, and it is the reason the expectation is not simply the argument echoed back \u2014 a decoder that passed its input through verbatim would satisfy an identity check and still be wrong about which of the two spellings is canonical."
+    },
+    {
+      "id": "Optional/record/empty-value-is-not-absence",
+      "type": "tstr",
+      "position": "record_field",
+      "method": "echoOpt",
+      "args": [
+        {
+          "required": "",
+          "maybe": "",
+          "count": 0,
+          "blob": {
+            "_bytes": ""
+          }
+        }
+      ],
+      "expect": {
+        "required": "",
+        "maybe": "",
+        "count": 0,
+        "blob": {
+          "_bytes": ""
+        }
+      },
+      "tags": [
+        "optional",
+        "record",
+        "empty",
+        "hostile"
+      ],
+      "why": "THE TRAP. \"\", 0 and the zero-length byte string are VALUES; only the single empty inhabitant (None / nullopt / invalid QVariant) is absence. A binding that reaches for a falsy test \u2014 `if (!v.maybe.empty())`, `if not v.count`, serde's skip_serializing_if \u2014 drops all three keys here while passing every other optional cell in this table. Present-and-empty must round-trip present."
+    },
+    {
+      "id": "Optional/record/uint-boundary-present",
+      "type": "uint",
+      "position": "record_field",
+      "method": "echoOpt",
+      "args": [
+        {
+          "required": "r",
+          "maybe": "m",
+          "count": 18446744073709551615,
+          "blob": {
+            "_bytes": ""
+          }
+        }
+      ],
+      "expect": {
+        "required": "r",
+        "maybe": "m",
+        "count": 18446744073709551615,
+        "blob": {
+          "_bytes": ""
+        }
+      },
+      "tags": [
+        "optional",
+        "record",
+        "boundary"
+      ],
+      "why": "optionality must not cost precision. uint64 max is the value that degraded to a double once nested (M1) and again through a record field (E3, closed by the codec unification); wrapping that same field in an optional adds a decode hop on every backend, and this is the cell that catches the hop reintroducing a double."
+    },
+    {
+      "id": "Optional/record/uint-absent",
+      "type": "uint",
+      "position": "record_field",
+      "method": "echoOpt",
+      "args": [
+        {
+          "required": "r",
+          "maybe": "m",
+          "blob": {
+            "_bytes": "aGk"
+          }
+        }
+      ],
+      "expect": {
+        "required": "r",
+        "maybe": "m",
+        "blob": {
+          "_bytes": "aGk"
+        }
+      },
+      "tags": [
+        "optional",
+        "record",
+        "empty"
+      ],
+      "why": "an absent NUMBER, isolated from the absent string: the failure mode here is a decoder that default-constructs a missing uint and emits \"count\": 0, which is indistinguishable from the real 0 that Optional/record/empty-value-is-not-absence sends on purpose. Absent must come back absent."
+    },
+    {
+      "id": "Optional/record/bstr-present-high-bytes",
+      "type": "bstr",
+      "position": "record_field",
+      "method": "echoOpt",
+      "args": [
+        {
+          "required": "r",
+          "maybe": "m",
+          "count": 1,
+          "blob": {
+            "_bytes": "AID_"
+          }
+        }
+      ],
+      "expect": {
+        "required": "r",
+        "maybe": "m",
+        "count": 1,
+        "blob": {
+          "_bytes": "AID_"
+        }
+      },
+      "tags": [
+        "optional",
+        "record",
+        "bytes-at-depth",
+        "boundary"
+      ],
+      "why": "bytes ride their own canonical {\"_bytes\"} tag and have their own history of dying one level down (E1: every byte >= 0x80 became U+FFFD; E2: an empty nested bstr arrived as null). An OPTIONAL bstr wraps exactly that path in one more decode, and 0x00/0x80/0xFF is the payload that tells a real byte decode from a UTF-8 round trip."
+    },
+    {
+      "id": "Optional/record/bstr-absent",
+      "type": "bstr",
+      "position": "record_field",
+      "method": "echoOpt",
+      "args": [
+        {
+          "required": "r",
+          "maybe": "m",
+          "count": 1
+        }
+      ],
+      "expect": {
+        "required": "r",
+        "maybe": "m",
+        "count": 1
+      },
+      "tags": [
+        "optional",
+        "record",
+        "empty"
+      ],
+      "why": "the byte-string half of the empty/absent confusion, and the sharper one: an absent bstr must NOT arrive as {\"_bytes\": \"\"}. E2's history is that a zero-length nested bstr was already being turned into null in one direction, so the obvious repair \u2014 decode null to an empty vector \u2014 closes E2 and erases absence in the same edit. This cell is what stops that."
+    },
+    {
+      "id": "Optional/[Record]/mixed-presence",
+      "type": "[Opt]",
+      "position": "method_arg,method_return",
+      "method": "echoOptList",
+      "args": [
+        [
+          {
+            "required": "a",
+            "maybe": "m",
+            "count": 1,
+            "blob": {
+              "_bytes": "aGk"
+            }
+          },
+          {
+            "required": "b"
+          },
+          {
+            "required": "c",
+            "maybe": null,
+            "count": 2
+          }
+        ]
+      ],
+      "expect": [
+        {
+          "required": "a",
+          "maybe": "m",
+          "count": 1,
+          "blob": {
+            "_bytes": "aGk"
+          }
+        },
+        {
+          "required": "b"
+        },
+        {
+          "required": "c",
+          "count": 2
+        }
+      ],
+      "tags": [
+        "optional",
+        "record",
+        "container"
+      ],
+      "why": "presence is PER ELEMENT. Three shapes in one array \u2014 fully present, fully absent, mixed with an explicit null \u2014 so a codec that decides key presence once for the whole list, or lets the first element template the rest (how a columnar or schema-sniffing encoder fails), cannot pass. It is also the only cell where the canonicalising round trip (element 3's null becoming an omitted key) happens at depth."
+    },
+    {
+      "id": "Optional/[Record]/empty",
+      "type": "[Opt]",
+      "position": "method_arg,method_return",
+      "method": "echoOptList",
+      "args": [
+        []
+      ],
+      "expect": [],
+      "tags": [
+        "optional",
+        "record",
+        "empty"
+      ],
+      "why": "an empty list whose element type is a record with optional fields: an empty array is where an element type gets lost ([[int]]/empty-inner), and an optional element type is one more thing to lose."
+    },
+    {
+      "id": "Optional/scalar/present",
+      "type": "?tstr",
+      "position": "method_arg,method_return",
+      "cells": [
+        [
+          "?tstr",
+          "method_arg"
+        ],
+        [
+          "result",
+          "method_return"
+        ]
+      ],
+      "method": "echoOptional",
+      "args": [
+        "hi"
+      ],
+      "expect": "hi",
+      "tags": [
+        "nominal",
+        "optional"
+      ],
+      "why": "the `?T` TYPE-KIND spelling, which spec.md:179,184-185 binds to the same meaning as the `? name: T` field flag that Opt uses. The two must emit identical code, and before OPT1 they did not even agree at runtime \u2014 a flag-optional field was validated against its base type while `?tstr` fell to args::Ty::Any and was not validated at all. Both spellings are in one contract so that divergence has somewhere to show; they now agree. `cells` is spelled out here because the two halves of this call no longer have the same type: the contract moved echoOptional's RETURN from `?tstr` to `result` and left the parameter at `?tstr`. Without it the table claims (?tstr, method_return), which the contract no longer declares, and leaves (result, method_return) \u2014 the only `result` return in this contract \u2014 uncovered."
+    },
+    {
+      "id": "Optional/scalar/empty-is-null",
+      "type": "?tstr",
+      "position": "method_arg,method_return",
+      "method": "echoOptional",
+      "args": [
+        null
+      ],
+      "expect": null,
+      "tags": [
+        "optional",
+        "empty",
+        "failure-class"
+      ],
+      "why": "a POSITIONAL slot has no key to omit and the arity must never change, so empty is spelled null \u2014 in the argument and in the return. One blocker left, registered as OPT2: a null RETURN is the failure token further up (logos_json_convert turns null into an invalid QVariant and core_service reports METHOD_FAILED), so an empty optional return is indistinguishable from a failed call. The argument half closed in logos-logoscore-py e7a5fee \u2014 _arg_to_str used to fall through to str(None) and send the literal string \"None\". Tagged `failure-class`: this IS class D, and failure/C/unknown-method in this same table is the class-C cell it has to be distinguishable from."
+    },
+    {
+      "id": "Optional/scalar/empty-string-is-a-value",
+      "type": "?tstr",
+      "position": "method_arg,method_return",
+      "method": "echoOptional",
+      "args": [
+        ""
+      ],
+      "expect": "",
+      "tags": [
+        "optional",
+        "empty",
+        "hostile"
+      ],
+      "why": "the positional twin of Optional/record/empty-value-is-not-absence: \"\" is a present value and must come back \"\", not null. A binding that models `?tstr` as \"a string, possibly empty\" \u2014 the natural shortcut in any language whose string type has no null \u2014 collapses the two states exactly here."
+    },
+    {
+      "id": "hostile/Optional/scalar/wrong-type",
+      "type": "?tstr",
+      "position": "method_arg",
+      "method": "echoOptional",
+      "args": [
+        42
+      ],
+      "expect": {
+        "__error__": "dispatch_failed"
+      },
+      "tags": [
+        "hostile",
+        "optional"
+      ],
+      "why": "R4, and the cell a lazy fix cannot pass: optional widens the domain by exactly ONE inhabitant (empty); it does not disable type checking. 42 is neither a tstr nor empty, so it must be REJECTED \u2014 not coerced, and not quietly treated as empty. Before OPT1 landed the Rust provider ACCEPTED it and echoed 42, because ty_descriptor's catch-all made `?tstr` args::Ty::Any and both C++ paths spelled Optional as an untyped QVariant/any for the same reason. Modelling `?T` as `any` passed every other optional cell in this table and failed only this one, which is what this cell exists to catch; both providers now reject it."
+    },
+    {
+      "id": "hostile/Optional/record/wrong-type-in-optional-field",
+      "type": "tstr",
+      "position": "record_field",
+      "method": "echoOpt",
+      "args": [
+        {
+          "required": "r",
+          "maybe": 42
+        }
+      ],
+      "expect": {
+        "__error__": "dispatch_failed"
+      },
+      "tags": [
+        "hostile",
+        "optional",
+        "record"
+      ],
+      "why": "R4 through a field path \u2014 the diagnostic should name arg0.maybe. Worth writing down because the obvious implementation of optional decoding, o.get(\"maybe\").and_then(|v| v.as_str()), turns a present-but-wrong value into None: it would make every absent-field cell pass and REGRESS this one. The descriptor is Ty::Opt(Tstr), so the rejection is the type check doing its job, not an accident of the field flag."
+    },
+    {
+      "id": "hostile/Optional/record/required-absent",
+      "type": "Opt",
+      "position": "record_field",
+      "method": "echoOpt",
+      "args": [
+        {
+          "maybe": "m"
+        }
+      ],
+      "expect": {
+        "__error__": "dispatch_failed"
+      },
+      "tags": [
+        "hostile",
+        "optional",
+        "record"
+      ],
+      "why": "the liberal decode is scoped to OPTIONAL slots. A missing REQUIRED field stays an error, unchanged. This guards the over-broad fix: making the record decoder tolerate absence everywhere would turn all four absent-field cells green and silently delete the difference between `required: tstr` and `? required: tstr`."
+    },
+    {
+      "id": "hostile/Optional/record/required-null",
+      "type": "Opt",
+      "position": "record_field",
+      "method": "echoOpt",
+      "args": [
+        {
+          "required": null,
+          "maybe": "m"
+        }
+      ],
+      "expect": {
+        "__error__": "dispatch_failed"
+      },
+      "tags": [
+        "hostile",
+        "optional",
+        "record"
+      ],
+      "why": "the other half of that guard: an explicit null in a REQUIRED slot is still an error, even though the identical token is a legal empty one field over. Absent and null are one state; which slot they land in is what decides whether the state is legal."
+    },
+    {
+      "id": "failure/A/module-not-loaded",
+      "type": "Blob",
+      "position": "method_arg",
+      "method": "echoBlob",
+      "args": [
+        {
+          "id": "a",
+          "n": 1,
+          "payload": {
+            "_bytes": "aGk"
+          }
+        }
+      ],
+      "module": "ghost_module",
+      "isolate": true,
+      "expect": {
+        "__error__": "MODULE_NOT_LOADED"
+      },
+      "tags": [
+        "failure-class",
+        "transport",
+        "adversarial"
+      ],
+      "why": "CLASS A in the table that owns the empty-optional cells, which is the only place the A-vs-D distinction can be made against a real `?T`. See cases.json failure/A/module-not-loaded for why the case re-targets its module, why the expectation is now the single token MODULE_NOT_LOADED rather than a list, and why `isolate` and `timeout_ms` are gone: logos-logoscore-cli answers from the host's loaded set instead of burning a 20s acquire that raced the client's own 20s RPC deadline. The claim is stronger than the list it replaces -- one token, identical across coordinates, no longer a timing assertion -- and the case now answers in milliseconds, so it costs its neighbours nothing."
+    },
+    {
+      "id": "failure/B/arity/too-few",
+      "type": "Blob",
+      "position": "method_arg",
+      "method": "echoBlob",
+      "args": [],
+      "expect": {
+        "__error__": "invalid_args"
+      },
+      "tags": [
+        "failure-class",
+        "arity",
+        "hostile"
+      ],
+      "why": "CLASS B against a REQUIRED parameter. `echoBlob` and not `echoOptional`: a missing argument in an OPTIONAL slot is a different question \u2014 the ext providers accept it and decode it as empty, which is a defensible reading of `?T` and is not what this cell is about. The count rule applies to the slots that have no empty inhabitant."
+    },
+    {
+      "id": "failure/B/arity/too-many",
+      "type": "Blob",
+      "position": "method_arg",
+      "method": "echoBlob",
+      "args": [
+        {
+          "id": "a",
+          "n": 1,
+          "payload": {
+            "_bytes": "aGk"
+          }
+        },
+        "extra"
+      ],
+      "isolate": true,
+      "expect": {
+        "__error__": "invalid_args"
+      },
+      "tags": [
+        "failure-class",
+        "arity",
+        "hostile"
+      ],
+      "why": "The arity overflow is not a property of the full_api providers: these are two different modules, generated from a different contract, and the extra argument is dropped here too. Written in both tables so the registry entry that covers it cannot be read as a fixture quirk. `isolate` for the reason THE ISOLATE RULE in cases.json's table comment states."
+    },
+    {
+      "id": "failure/B/arity/too-many-zero-parameter",
+      "type": "tstr",
+      "position": "method_return",
+      "method": "whoAmI",
+      "args": [
+        "junk"
+      ],
+      "isolate": true,
+      "expect": {
+        "__error__": "invalid_args"
+      },
+      "tags": [
+        "failure-class",
+        "arity",
+        "hostile"
+      ],
+      "why": "The zero-parameter path, in the ext table \u2014 the same distinct code path cases.json/failure/B/arity/too-many-zero-parameter names, on providers whose dispatch was generated separately. `isolate` for the reason THE ISOLATE RULE in cases.json's table comment states."
+    },
+    {
+      "id": "failure/B/arity/too-many-lidl-builtin",
+      "type": "tstr",
+      "position": "method_return",
+      "method": "lidl",
+      "args": [
+        "junk"
+      ],
+      "isolate": true,
+      "expect": {
+        "__error__": "invalid_args"
+      },
+      "tags": [
+        "failure-class",
+        "arity",
+        "hostile"
+      ],
+      "why": "The lidl() built-in in the ext table: the same glue intercept as cases.json/failure/B/arity/too-many-lidl-builtin, in two modules generated from a different contract and in the ext Qt proxy. `isolate` for the reason THE ISOLATE RULE in cases.json's table comment states."
+    },
+    {
+      "id": "failure/C/unknown-method",
+      "type": "tstr",
+      "position": "method_return",
+      "method": "noSuchMethod",
+      "args": [],
+      "isolate": true,
+      "expect": {
+        "__error__": "METHOD_NOT_FOUND"
+      },
+      "tags": [
+        "failure-class",
+        "adversarial"
+      ],
+      "why": "CLASS C, here so that it stands beside Optional/scalar/empty-is-null \u2014 class D against a real `?tstr` \u2014 in ONE table, measured on the same providers by the same driver in the same run. That pairing is the executable form of the question this family exists to answer: can a caller tell \"the provider answered, and the answer is nothing\" from \"the call did not succeed\"? Only if these two cells disagree. `isolate` for the reason THE ISOLATE RULE in cases.json's table comment states."
+    }
+  ],
+  "events": [
+    {
+      "id": "event/Record",
+      "type": "Blob",
+      "position": "event_param",
+      "event": "blobEvent",
+      "fire": "fireBlobEvent",
+      "value": {
+        "id": "e",
+        "n": 7,
+        "payload": {
+          "_bytes": "aGk"
+        }
+      },
+      "cells": [
+        [
+          "Blob",
+          "event_param"
+        ]
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+identity_optional.lidl: module 'identity_optional_module' declares 'version() -> ', but 'version' is reserved for module identity and must be 'version() -> tstr'

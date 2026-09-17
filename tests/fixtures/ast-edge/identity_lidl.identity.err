@@ -1,0 +1,1 @@
+identity_lidl.lidl: module 'identity_lidl_module' declares 'lidl()', but 'lidl' is a generator-owned built-in that returns the canonical interface document

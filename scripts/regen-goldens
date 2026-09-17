@@ -1,0 +1,54 @@
+# Regenerate (or --check) tests/goldens with logos-bridge-codegen and the pinned lidl CLI.
+# Run through nix, from the repository root: `nix run .#regen-goldens [-- --check]`.
+"""regen-goldens [--check] [--lidl-cli PATH] [--root DIR] [--out DIR]
+
+For each golden contract (tests/fixtures/lidl/<m>.lidl) this writes
+<out>/<m>_client.py (codegen python) and <out>/<m>.md (codegen markdown).
+--check compares instead of writing, ignoring the provenance lines.
+
+Exit status: 0 ok, 1 drift, anything else the codegen CLI's status.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+from pathlib import Path
+
+GOLDENS = ("test_fullapi_cpp", "test_fullapi_ext_cpp", "storage_module", "mini_module")
+HINT = "nix run .#regen-goldens"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(prog="regen-goldens", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--check", action="store_true")
+    parser.add_argument("--lidl-cli", default=None)
+    parser.add_argument("--root", type=Path, default=Path.cwd())
+    parser.add_argument("--out", default="tests/goldens", help="relative to --root")
+    args = parser.parse_args()
+    root = args.root.resolve()
+    sys.path.insert(0, str(root / "src"))
+    from logos_bridge.codegen import run
+
+    os.chdir(root)  # relative paths keep the provenance lines the same everywhere
+    extra = ["--lidl-cli", args.lidl_cli] if args.lidl_cli else []
+    worst = 0
+    for name in GOLDENS:
+        source = f"tests/fixtures/lidl/{name}.lidl"
+        for command, target, options in (
+            ("python", f"{args.out}/{name}_client.py", ["--regen-hint", HINT]),
+            ("markdown", f"{args.out}/{name}.md", []),
+        ):
+            argv = [command, "--lidl", source, "-o", target, *options, *extra]
+            if args.check:
+                argv.append("--check")
+            status = run(argv)
+            print(f"regen-goldens: {command} {name}: {'ok' if status == 0 else f'exit {status}'}")
+            worst = max(worst, status)
+    return worst
+
+
+if __name__ == "__main__":
+    sys.exit(main())

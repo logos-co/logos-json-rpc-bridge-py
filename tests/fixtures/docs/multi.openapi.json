@@ -1,0 +1,1460 @@
+{
+  "components": {
+    "requestBodies": {
+      "NoParams": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "description": "No parameters: an empty object or an empty array.",
+              "oneOf": [
+                {
+                  "maxProperties": 0,
+                  "type": "object"
+                },
+                {
+                  "maxItems": 0,
+                  "type": "array"
+                }
+              ],
+              "title": "NoParams"
+            }
+          }
+        },
+        "description": "No parameters: send no body, {} or [].",
+        "required": false
+      },
+      "UntypedParams": {
+        "content": {
+          "application/json": {
+            "schema": {}
+          }
+        },
+        "description": "Untyped: the parameters by name (an object) or by position (an array).",
+        "required": false
+      }
+    },
+    "responses": {
+      "Forbidden": {
+        "content": {
+          "text/html": {
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Refused before routing: the Host header is not a loopback literal this bridge bound, or the Origin is not in http.allowed_origins."
+      },
+      "LengthRequired": {
+        "content": {
+          "text/html": {
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "The request states no valid Content-Length, or has a Transfer-Encoding: the bridge reads no chunked body. The connection is closed."
+      },
+      "Unauthorized": {
+        "content": {
+          "text/html": {
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "auth.mode is bearer and the request carries no valid `Authorization: Bearer` token."
+      },
+      "UnsupportedMediaType": {
+        "content": {
+          "text/html": {
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "The Content-Type is not application/json, which is required even for an empty body."
+      },
+      "UntypedCallResult": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "oneOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "result": {}
+                  },
+                  "required": [
+                    "result"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "$ref": "#/components/schemas/ErrorBody"
+                },
+                {
+                  "$ref": "#/components/schemas/JsonRpcErrorResponse"
+                }
+              ]
+            }
+          }
+        },
+        "description": "The call's outcome: the method's value (or a ProviderRejection), or a JSON-RPC error."
+      }
+    },
+    "schemas": {
+      "Bytes": {
+        "additionalProperties": false,
+        "description": "A LIDL bstr: the bytes as base64url without padding (RFC 4648 section 5), carried as the object's only key. Do not name a map key \"_bytes\".",
+        "properties": {
+          "_bytes": {
+            "pattern": "^[A-Za-z0-9_-]*$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "_bytes"
+        ],
+        "title": "Bytes",
+        "type": "object"
+      },
+      "ErrorBody": {
+        "additionalProperties": false,
+        "description": "A module route's refusal: the JSON-RPC error alone. Denied, unexposed and unknown targets all get the same -32601.",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/JsonRpcError"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ErrorBody",
+        "type": "object"
+      },
+      "JsonRpcError": {
+        "description": "A JSON-RPC 2.0 error object, with the Logos error taxonomy in data.",
+        "properties": {
+          "code": {
+            "type": "integer"
+          },
+          "data": {
+            "properties": {
+              "invalid_params_detail": {
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "description": "schema-mismatch, malformed-cbor or non-deterministic-cbor.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reason"
+                ],
+                "type": "object"
+              },
+              "logos_error_code": {
+                "type": "integer"
+              },
+              "logos_error_name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "logos_error_code",
+              "logos_error_name"
+            ],
+            "type": "object"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "JsonRpcError",
+        "type": "object"
+      },
+      "JsonRpcErrorResponse": {
+        "additionalProperties": false,
+        "description": "A complete JSON-RPC 2.0 error response.",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/JsonRpcError"
+          },
+          "id": {
+            "$ref": "#/components/schemas/JsonRpcId"
+          },
+          "jsonrpc": {
+            "const": "2.0"
+          }
+        },
+        "required": [
+          "jsonrpc",
+          "id",
+          "error"
+        ],
+        "title": "JsonRpcErrorResponse",
+        "type": "object"
+      },
+      "JsonRpcId": {
+        "description": "A JSON-RPC request id; a reply echoes it.",
+        "title": "JsonRpcId",
+        "type": [
+          "string",
+          "number",
+          "null"
+        ]
+      },
+      "LogosResult": {
+        "description": "A LIDL result. A provider that ran and failed answers success=false here: an application failure is a successful call, never a JSON-RPC error.",
+        "properties": {
+          "error": {
+            "description": "The failure message as a string; null when there is none."
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "value": {
+            "description": "The payload; any JSON value, null when absent."
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "LogosResult",
+        "type": "object"
+      },
+      "ProviderRejection": {
+        "additionalProperties": false,
+        "description": "The provider refused the call and said why. It arrives as the call's result, not as a JSON-RPC error.",
+        "properties": {
+          "code": {
+            "description": "Known codes: dispatch_failed (the argument values were refused), invalid_args (wrong argument count), unknown_method (reserved; not emitted yet). Treat any other code as a refusal too.",
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "origin": {
+            "description": "The module that refused.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "origin"
+        ],
+        "title": "ProviderRejection",
+        "type": "object"
+      },
+      "mini_module.Note": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "id": {
+            "type": "string"
+          },
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "body"
+        ],
+        "title": "Note",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "The HTTP surface of the Logos JSON-RPC bridge. `POST /modules/<module>/<method>` calls an exposed module method with its parameters as the body, typed from the module's canonical LIDL contract when it has one (x-logos-untyped marks names-only modules). `POST /rpc` speaks JSON-RPC 2.0 (see rpc.discover). Every route checks Host and Origin and sends no CORS headers. A refusal (401, 403, 411, 415) leaves the request body unread, so when the request declares a body the connection closes after the refusal. Operations cover what this bridge lets you call; component schemas cover every record in each contract, and x-logos-modules gives each module's status, digests and exposure.",
+    "title": "Logos JSON-RPC bridge",
+    "version": "0.1.0"
+  },
+  "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
+  "openapi": "3.1.1",
+  "paths": {
+    "/asyncapi.json": {
+      "get": {
+        "description": "The AsyncAPI 3.0.0 description of this bridge's WebSocket endpoint.",
+        "operationId": "getAsyncApi",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The AsyncAPI document."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "summary": "The WebSocket description.",
+        "tags": [
+          "bridge"
+        ],
+        "x-logos-bridge-op": true
+      }
+    },
+    "/healthz": {
+      "get": {
+        "description": "Liveness and draining state. Gated like every other route.",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "protocol": {
+                      "const": "json-rpc-2.0"
+                    },
+                    "status": {
+                      "enum": [
+                        "ok",
+                        "draining"
+                      ],
+                      "type": "string"
+                    },
+                    "uptime_seconds": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "uptime_seconds",
+                    "protocol"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The bridge is serving."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "summary": "Bridge health.",
+        "tags": [
+          "bridge"
+        ],
+        "x-logos-bridge-op": true
+      }
+    },
+    "/modules": {
+      "get": {
+        "description": "The rpc.list_modules views, in configuration order, without `interface`.",
+        "operationId": "listModules",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "description": "The bridge's view of one module, without `interface`.",
+                    "properties": {
+                      "authoritative": {
+                        "type": "boolean"
+                      },
+                      "contract_sha256": {
+                        "pattern": "^[0-9a-f]{64}$",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "cross_check": {
+                        "type": [
+                          "object",
+                          "null"
+                        ]
+                      },
+                      "exposure": {
+                        "properties": {
+                          "events": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "methods": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "interface_error": {
+                        "type": "string"
+                      },
+                      "interface_sha256": {
+                        "pattern": "^[0-9a-f]{64}$",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "interface_status": {
+                        "enum": [
+                          "pending",
+                          "ok",
+                          "untyped",
+                          "invalid"
+                        ],
+                        "type": "string"
+                      },
+                      "module": {
+                        "type": "string"
+                      },
+                      "source": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "module"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "The module views."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "summary": "Describe every exposed module.",
+        "tags": [
+          "bridge"
+        ],
+        "x-logos-bridge-op": true
+      }
+    },
+    "/modules/broken_module/lidl": {
+      "post": {
+        "description": "Untyped: the module's lidl() contract was refused (see interface_error in x-logos-modules), so only names are known.\n\nBuilt-in: always callable for an exposed module, whatever this bridge's method policy.",
+        "operationId": "broken_module.lidl",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/UntypedParams"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/UntypedCallResult"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "411": {
+            "$ref": "#/components/responses/LengthRequired"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "summary": "Untyped: the module's lidl() contract was refused (see interface_error in x-logos-modules), so only names are known.",
+        "tags": [
+          "broken_module"
+        ],
+        "x-logos-method": "lidl",
+        "x-logos-module": "broken_module",
+        "x-logos-untyped": true
+      }
+    },
+    "/modules/broken_module/reset": {
+      "post": {
+        "operationId": "broken_module.reset",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/UntypedParams"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/UntypedCallResult"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "411": {
+            "$ref": "#/components/responses/LengthRequired"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "summary": "Untyped: the module's lidl() contract was refused (see interface_error in x-logos-modules), so only names are known.",
+        "tags": [
+          "broken_module"
+        ],
+        "x-logos-method": "reset",
+        "x-logos-module": "broken_module",
+        "x-logos-untyped": true
+      }
+    },
+    "/modules/legacy_module/add": {
+      "post": {
+        "operationId": "legacy_module.add",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/UntypedParams"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/UntypedCallResult"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "411": {
+            "$ref": "#/components/responses/LengthRequired"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "summary": "Untyped: the module publishes no lidl() contract, so only names are known.",
+        "tags": [
+          "legacy_module"
+        ],
+        "x-logos-method": "add",
+        "x-logos-module": "legacy_module",
+        "x-logos-untyped": true
+      }
+    },
+    "/modules/legacy_module/ping": {
+      "post": {
+        "operationId": "legacy_module.ping",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/UntypedParams"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/UntypedCallResult"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "411": {
+            "$ref": "#/components/responses/LengthRequired"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "summary": "Untyped: the module publishes no lidl() contract, so only names are known.",
+        "tags": [
+          "legacy_module"
+        ],
+        "x-logos-method": "ping",
+        "x-logos-module": "legacy_module",
+        "x-logos-untyped": true
+      }
+    },
+    "/modules/mini_module/clear": {
+      "post": {
+        "operationId": "mini_module.clear",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/NoParams"
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "result": {
+                          "anyOf": [
+                            {
+                              "const": true
+                            },
+                            {
+                              "$ref": "#/components/schemas/ProviderRejection"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "result"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorBody"
+                    },
+                    {
+                      "$ref": "#/components/schemas/JsonRpcErrorResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The call's outcome: the method's value (or a ProviderRejection), or a JSON-RPC error."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "411": {
+            "$ref": "#/components/responses/LengthRequired"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "summary": "Forget every note.",
+        "tags": [
+          "mini_module"
+        ],
+        "x-logos-method": "clear",
+        "x-logos-module": "mini_module"
+      }
+    },
+    "/modules/mini_module/find": {
+      "post": {
+        "description": "Look a note up. An unknown id is success=false, not an error.",
+        "operationId": "mini_module.find",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "prefix": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "items": false,
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "prefixItems": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    ],
+                    "type": "array"
+                  }
+                ]
+              }
+            }
+          },
+          "description": "The parameters, by name (an object) or by position (an array of exactly the declared arity, null for an empty optional slot).",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "result": {
+                          "anyOf": [
+                            {
+                              "$ref": "#/components/schemas/LogosResult"
+                            },
+                            {
+                              "$ref": "#/components/schemas/ProviderRejection"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "result"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorBody"
+                    },
+                    {
+                      "$ref": "#/components/schemas/JsonRpcErrorResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The call's outcome: the method's value (or a ProviderRejection), or a JSON-RPC error."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "411": {
+            "$ref": "#/components/responses/LengthRequired"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "summary": "Look a note up.",
+        "tags": [
+          "mini_module"
+        ],
+        "x-logos-method": "find",
+        "x-logos-module": "mini_module"
+      }
+    },
+    "/modules/mini_module/lidl": {
+      "post": {
+        "description": "The module's canonical LIDL interface document.\n\nReturns this module's full canonical LIDL contract: the exact `.lidl` text its build published, never filtered by this bridge's policy.\n\nBuilt-in: always callable for an exposed module, whatever this bridge's method policy.",
+        "operationId": "mini_module.lidl",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/NoParams"
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "result": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "$ref": "#/components/schemas/ProviderRejection"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "result"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorBody"
+                    },
+                    {
+                      "$ref": "#/components/schemas/JsonRpcErrorResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The call's outcome: the method's value (or a ProviderRejection), or a JSON-RPC error."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "411": {
+            "$ref": "#/components/responses/LengthRequired"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "summary": "The module's canonical LIDL interface document.",
+        "tags": [
+          "mini_module"
+        ],
+        "x-logos-derived": true,
+        "x-logos-method": "lidl",
+        "x-logos-module": "mini_module"
+      }
+    },
+    "/modules/mini_module/name": {
+      "post": {
+        "description": "The module's name, as declared in its metadata.\n\nBuilt-in: always callable for an exposed module, whatever this bridge's method policy.",
+        "operationId": "mini_module.name",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/NoParams"
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "result": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "$ref": "#/components/schemas/ProviderRejection"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "result"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorBody"
+                    },
+                    {
+                      "$ref": "#/components/schemas/JsonRpcErrorResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The call's outcome: the method's value (or a ProviderRejection), or a JSON-RPC error."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "411": {
+            "$ref": "#/components/responses/LengthRequired"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "summary": "The module's name, as declared in its metadata.",
+        "tags": [
+          "mini_module"
+        ],
+        "x-logos-derived": true,
+        "x-logos-method": "name",
+        "x-logos-module": "mini_module"
+      }
+    },
+    "/modules/mini_module/put": {
+      "post": {
+        "description": "Store a note and return it as stored.\n\n```json\n{\"id\": \"n1\", \"body\": {\"_bytes\": \"aGk\"}}\n```",
+        "operationId": "mini_module.put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "note": {
+                        "$ref": "#/components/schemas/mini_module.Note"
+                      }
+                    },
+                    "required": [
+                      "note"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "items": false,
+                    "maxItems": 1,
+                    "minItems": 1,
+                    "prefixItems": [
+                      {
+                        "$ref": "#/components/schemas/mini_module.Note"
+                      }
+                    ],
+                    "type": "array"
+                  }
+                ]
+              }
+            }
+          },
+          "description": "The parameters, by name (an object) or by position (an array of exactly the declared arity, null for an empty optional slot).",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "result": {
+                          "anyOf": [
+                            {
+                              "$ref": "#/components/schemas/mini_module.Note"
+                            },
+                            {
+                              "$ref": "#/components/schemas/ProviderRejection"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "result"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorBody"
+                    },
+                    {
+                      "$ref": "#/components/schemas/JsonRpcErrorResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The call's outcome: the method's value (or a ProviderRejection), or a JSON-RPC error."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "411": {
+            "$ref": "#/components/responses/LengthRequired"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "summary": "Store a note and return it as stored.",
+        "tags": [
+          "mini_module"
+        ],
+        "x-logos-method": "put",
+        "x-logos-module": "mini_module"
+      }
+    },
+    "/modules/mini_module/version": {
+      "post": {
+        "description": "The module's version, as declared in its metadata.\n\nBuilt-in: always callable for an exposed module, whatever this bridge's method policy.",
+        "operationId": "mini_module.version",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/NoParams"
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "result": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "$ref": "#/components/schemas/ProviderRejection"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "result"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorBody"
+                    },
+                    {
+                      "$ref": "#/components/schemas/JsonRpcErrorResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The call's outcome: the method's value (or a ProviderRejection), or a JSON-RPC error."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "411": {
+            "$ref": "#/components/responses/LengthRequired"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "summary": "The module's version, as declared in its metadata.",
+        "tags": [
+          "mini_module"
+        ],
+        "x-logos-derived": true,
+        "x-logos-method": "version",
+        "x-logos-module": "mini_module"
+      }
+    },
+    "/modules/{module}": {
+      "get": {
+        "description": "The rpc.schema view: interface_status, the complete LIDL contract as `interface` when ok, this bridge's exposure, the digests and the live report.",
+        "operationId": "getModule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "module",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "The bridge's view of one module. Keys not listed here are the live report.",
+                  "properties": {
+                    "authoritative": {
+                      "type": "boolean"
+                    },
+                    "contract_sha256": {
+                      "pattern": "^[0-9a-f]{64}$",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "cross_check": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "exposure": {
+                      "properties": {
+                        "events": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "methods": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "interface": {
+                      "description": "The complete LIDL JSON AST (as `lidl json --identity` prints it); present only when interface_status is ok.",
+                      "type": "object"
+                    },
+                    "interface_error": {
+                      "type": "string"
+                    },
+                    "interface_sha256": {
+                      "pattern": "^[0-9a-f]{64}$",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "interface_status": {
+                      "enum": [
+                        "pending",
+                        "ok",
+                        "untyped",
+                        "invalid"
+                      ],
+                      "type": "string"
+                    },
+                    "module": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "module"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The module view."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonRpcError"
+                }
+              }
+            },
+            "description": "Not exposed or unknown: the same -32601 error object a denied call gets."
+          }
+        },
+        "summary": "Describe one exposed module.",
+        "tags": [
+          "bridge"
+        ],
+        "x-logos-bridge-op": true
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "description": "The OpenAPI 3.1.1 description of this bridge.",
+        "operationId": "getOpenApi",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "This OpenAPI document."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "summary": "This document.",
+        "tags": [
+          "bridge"
+        ],
+        "x-logos-bridge-op": true
+      }
+    },
+    "/rpc": {
+      "post": {
+        "description": "One request or a batch. Every rpc.* operation and every `<module>.<method>` alias (see rpc.discover) is accepted here; events need the WebSocket endpoint (see /asyncapi.json). A request without an id is still answered, with id null: a module call is refused with -32600, and any other operation runs.",
+        "operationId": "postRpc",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "properties": {
+                      "id": {
+                        "$ref": "#/components/schemas/JsonRpcId"
+                      },
+                      "jsonrpc": {
+                        "const": "2.0"
+                      },
+                      "method": {
+                        "type": "string"
+                      },
+                      "params": {
+                        "type": [
+                          "object",
+                          "array"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "jsonrpc",
+                      "method"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "items": {
+                      "properties": {
+                        "id": {
+                          "$ref": "#/components/schemas/JsonRpcId"
+                        },
+                        "jsonrpc": {
+                          "const": "2.0"
+                        },
+                        "method": {
+                          "type": "string"
+                        },
+                        "params": {
+                          "type": [
+                            "object",
+                            "array"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "jsonrpc",
+                        "method"
+                      ],
+                      "type": "object"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "oneOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "$ref": "#/components/schemas/JsonRpcId"
+                            },
+                            "jsonrpc": {
+                              "const": "2.0"
+                            },
+                            "result": {}
+                          },
+                          "required": [
+                            "jsonrpc",
+                            "id",
+                            "result"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "$ref": "#/components/schemas/JsonRpcErrorResponse"
+                        }
+                      ]
+                    },
+                    {
+                      "items": {
+                        "oneOf": [
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "$ref": "#/components/schemas/JsonRpcId"
+                              },
+                              "jsonrpc": {
+                                "const": "2.0"
+                              },
+                              "result": {}
+                            },
+                            "required": [
+                              "jsonrpc",
+                              "id",
+                              "result"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "$ref": "#/components/schemas/JsonRpcErrorResponse"
+                          }
+                        ]
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The response, or the batch of responses. JSON-RPC failures ride in the body at 200."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "411": {
+            "$ref": "#/components/responses/LengthRequired"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "summary": "JSON-RPC 2.0 endpoint.",
+        "tags": [
+          "bridge"
+        ],
+        "x-logos-bridge-op": true
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "Loopback only.",
+      "url": "http://127.0.0.1:8645"
+    }
+  ],
+  "tags": [
+    {
+      "description": "The bridge's own routes.",
+      "name": "bridge"
+    },
+    {
+      "description": "A small contract for the multi-module golden.",
+      "name": "mini_module"
+    },
+    {
+      "description": "Untyped: the module publishes no lidl() contract, so only names are known.",
+      "name": "legacy_module"
+    },
+    {
+      "description": "Untyped: the module's lidl() contract was refused (see interface_error in x-logos-modules), so only names are known.",
+      "name": "broken_module"
+    }
+  ],
+  "x-logos-modules": [
+    {
+      "contract_sha256": "68bde1680866ea0e450ed711e334e8c70013110eddb8889887cba029232e1f7c",
+      "exposure": {
+        "events": [
+          "added"
+        ],
+        "methods": [
+          "put",
+          "find",
+          "clear",
+          "name",
+          "version",
+          "lidl"
+        ]
+      },
+      "interface_sha256": "589b01b9cbf84ab916d6d804868780c7c0e5d92063ee3b60061a55f330ff42ca",
+      "name": "mini_module",
+      "status": "ok"
+    },
+    {
+      "exposure": {
+        "events": [
+          "ticked"
+        ],
+        "methods": [
+          "ping",
+          "add"
+        ]
+      },
+      "name": "legacy_module",
+      "status": "untyped"
+    },
+    {
+      "exposure": {
+        "events": [],
+        "methods": [
+          "reset",
+          "lidl"
+        ]
+      },
+      "interface_error": "3:17: expected ')' (lidl reader 1f54a2a)",
+      "name": "broken_module",
+      "status": "invalid"
+    },
+    {
+      "exposure": {
+        "events": [],
+        "methods": []
+      },
+      "name": "late_module",
+      "status": "pending"
+    }
+  ]
+}

@@ -1,0 +1,2156 @@
+{
+  "asyncapi": "3.0.0",
+  "channels": {
+    "ws": {
+      "address": "/ws",
+      "bindings": {
+        "ws": {
+          "bindingVersion": "0.1.0",
+          "headers": {
+            "properties": {
+              "Sec-WebSocket-Protocol": {
+                "const": "jsonrpc-bridge.v1",
+                "description": "The subprotocol to offer.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "method": "GET"
+        }
+      },
+      "description": "Every request, reply and notification travels on this one connection. A slow reader is closed, not silently skipped; see x-logos-ws-close-codes.",
+      "messages": {
+        "broken_module.lidl.request": {
+          "$ref": "#/components/messages/broken_module.lidl.request"
+        },
+        "broken_module.lidl.result": {
+          "$ref": "#/components/messages/broken_module.lidl.result"
+        },
+        "broken_module.reset.request": {
+          "$ref": "#/components/messages/broken_module.reset.request"
+        },
+        "broken_module.reset.result": {
+          "$ref": "#/components/messages/broken_module.reset.result"
+        },
+        "legacy_module.add.request": {
+          "$ref": "#/components/messages/legacy_module.add.request"
+        },
+        "legacy_module.add.result": {
+          "$ref": "#/components/messages/legacy_module.add.result"
+        },
+        "legacy_module.ping.request": {
+          "$ref": "#/components/messages/legacy_module.ping.request"
+        },
+        "legacy_module.ping.result": {
+          "$ref": "#/components/messages/legacy_module.ping.result"
+        },
+        "legacy_module.ticked.event": {
+          "$ref": "#/components/messages/legacy_module.ticked.event"
+        },
+        "legacy_module.ticked.subscribe": {
+          "$ref": "#/components/messages/legacy_module.ticked.subscribe"
+        },
+        "legacy_module.ticked.subscribed": {
+          "$ref": "#/components/messages/legacy_module.ticked.subscribed"
+        },
+        "mini_module.added.event": {
+          "$ref": "#/components/messages/mini_module.added.event"
+        },
+        "mini_module.added.subscribe": {
+          "$ref": "#/components/messages/mini_module.added.subscribe"
+        },
+        "mini_module.added.subscribed": {
+          "$ref": "#/components/messages/mini_module.added.subscribed"
+        },
+        "mini_module.clear.request": {
+          "$ref": "#/components/messages/mini_module.clear.request"
+        },
+        "mini_module.clear.result": {
+          "$ref": "#/components/messages/mini_module.clear.result"
+        },
+        "mini_module.find.request": {
+          "$ref": "#/components/messages/mini_module.find.request"
+        },
+        "mini_module.find.result": {
+          "$ref": "#/components/messages/mini_module.find.result"
+        },
+        "mini_module.lidl.request": {
+          "$ref": "#/components/messages/mini_module.lidl.request"
+        },
+        "mini_module.lidl.result": {
+          "$ref": "#/components/messages/mini_module.lidl.result"
+        },
+        "mini_module.name.request": {
+          "$ref": "#/components/messages/mini_module.name.request"
+        },
+        "mini_module.name.result": {
+          "$ref": "#/components/messages/mini_module.name.result"
+        },
+        "mini_module.put.request": {
+          "$ref": "#/components/messages/mini_module.put.request"
+        },
+        "mini_module.put.result": {
+          "$ref": "#/components/messages/mini_module.put.result"
+        },
+        "mini_module.version.request": {
+          "$ref": "#/components/messages/mini_module.version.request"
+        },
+        "mini_module.version.result": {
+          "$ref": "#/components/messages/mini_module.version.result"
+        },
+        "rpc.error": {
+          "$ref": "#/components/messages/rpc.error"
+        },
+        "rpc.subscription_terminated": {
+          "$ref": "#/components/messages/rpc.subscription_terminated"
+        },
+        "rpc.unsubscribe": {
+          "$ref": "#/components/messages/rpc.unsubscribe"
+        },
+        "rpc.unsubscribed": {
+          "$ref": "#/components/messages/rpc.unsubscribed"
+        }
+      },
+      "title": "JSON-RPC 2.0 over WebSocket"
+    }
+  },
+  "components": {
+    "correlationIds": {
+      "requestId": {
+        "description": "The JSON-RPC id: a reply echoes its request's id.",
+        "location": "$message.payload#/id"
+      },
+      "subscriptionId": {
+        "description": "The caller-assigned subscription id from rpc.subscribe.",
+        "location": "$message.payload#/params/subscription"
+      }
+    },
+    "messages": {
+      "broken_module.lidl.request": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "broken_module.lidl.request",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "broken_module.lidl"
+            },
+            "params": {}
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "method"
+          ],
+          "type": "object"
+        },
+        "summary": "Untyped: the module's lidl() contract was refused (see interface_error in x-logos-modules), so only names are known.",
+        "title": "Call broken_module.lidl",
+        "x-logos-method": "lidl",
+        "x-logos-module": "broken_module",
+        "x-logos-untyped": true
+      },
+      "broken_module.lidl.result": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "broken_module.lidl.result",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "result": {}
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "result"
+          ],
+          "type": "object"
+        },
+        "summary": "The value broken_module.lidl returned, or a ProviderRejection.",
+        "title": "broken_module.lidl result",
+        "x-logos-method": "lidl",
+        "x-logos-module": "broken_module",
+        "x-logos-untyped": true
+      },
+      "broken_module.reset.request": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "broken_module.reset.request",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "broken_module.reset"
+            },
+            "params": {}
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "method"
+          ],
+          "type": "object"
+        },
+        "summary": "Untyped: the module's lidl() contract was refused (see interface_error in x-logos-modules), so only names are known.",
+        "title": "Call broken_module.reset",
+        "x-logos-method": "reset",
+        "x-logos-module": "broken_module",
+        "x-logos-untyped": true
+      },
+      "broken_module.reset.result": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "broken_module.reset.result",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "result": {}
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "result"
+          ],
+          "type": "object"
+        },
+        "summary": "The value broken_module.reset returned, or a ProviderRejection.",
+        "title": "broken_module.reset result",
+        "x-logos-method": "reset",
+        "x-logos-module": "broken_module",
+        "x-logos-untyped": true
+      },
+      "legacy_module.add.request": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "legacy_module.add.request",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "legacy_module.add"
+            },
+            "params": {}
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "method"
+          ],
+          "type": "object"
+        },
+        "summary": "Untyped: the module publishes no lidl() contract, so only names are known.",
+        "title": "Call legacy_module.add",
+        "x-logos-method": "add",
+        "x-logos-module": "legacy_module",
+        "x-logos-untyped": true
+      },
+      "legacy_module.add.result": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "legacy_module.add.result",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "result": {}
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "result"
+          ],
+          "type": "object"
+        },
+        "summary": "The value legacy_module.add returned, or a ProviderRejection.",
+        "title": "legacy_module.add result",
+        "x-logos-method": "add",
+        "x-logos-module": "legacy_module",
+        "x-logos-untyped": true
+      },
+      "legacy_module.ping.request": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "legacy_module.ping.request",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "legacy_module.ping"
+            },
+            "params": {}
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "method"
+          ],
+          "type": "object"
+        },
+        "summary": "Untyped: the module publishes no lidl() contract, so only names are known.",
+        "title": "Call legacy_module.ping",
+        "x-logos-method": "ping",
+        "x-logos-module": "legacy_module",
+        "x-logos-untyped": true
+      },
+      "legacy_module.ping.result": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "legacy_module.ping.result",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "result": {}
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "result"
+          ],
+          "type": "object"
+        },
+        "summary": "The value legacy_module.ping returned, or a ProviderRejection.",
+        "title": "legacy_module.ping result",
+        "x-logos-method": "ping",
+        "x-logos-module": "legacy_module",
+        "x-logos-untyped": true
+      },
+      "legacy_module.ticked.event": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/subscriptionId"
+        },
+        "name": "legacy_module.ticked.event",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "rpc.event"
+            },
+            "params": {
+              "additionalProperties": false,
+              "properties": {
+                "data": {
+                  "description": "The event's parameters, by position."
+                },
+                "event": {
+                  "const": "ticked"
+                },
+                "generation": {
+                  "$ref": "#/components/schemas/EventGeneration"
+                },
+                "module": {
+                  "const": "legacy_module"
+                },
+                "subscription": {
+                  "$ref": "#/components/schemas/SubscriptionId"
+                },
+                "ts": {
+                  "$ref": "#/components/schemas/EventTimestamp"
+                }
+              },
+              "required": [
+                "subscription",
+                "module",
+                "event",
+                "data",
+                "generation",
+                "ts"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        "summary": "Untyped: the module publishes no lidl() contract, so only names are known.",
+        "title": "legacy_module.ticked",
+        "x-logos-event": "ticked",
+        "x-logos-module": "legacy_module",
+        "x-logos-untyped": true
+      },
+      "legacy_module.ticked.subscribe": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "legacy_module.ticked.subscribe",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "rpc.subscribe"
+            },
+            "params": {
+              "additionalProperties": false,
+              "properties": {
+                "event": {
+                  "const": "ticked"
+                },
+                "module": {
+                  "const": "legacy_module"
+                },
+                "subscription": {
+                  "$ref": "#/components/schemas/SubscriptionId"
+                }
+              },
+              "required": [
+                "subscription",
+                "module",
+                "event"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        "title": "Subscribe to legacy_module.ticked",
+        "x-logos-event": "ticked",
+        "x-logos-module": "legacy_module",
+        "x-logos-untyped": true
+      },
+      "legacy_module.ticked.subscribed": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "legacy_module.ticked.subscribed",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "result": {
+              "additionalProperties": false,
+              "properties": {
+                "event": {
+                  "const": "ticked"
+                },
+                "module": {
+                  "const": "legacy_module"
+                },
+                "operation": {
+                  "const": "subscribe"
+                },
+                "state": {
+                  "$ref": "#/components/schemas/SubscriptionState"
+                },
+                "subscription": {
+                  "$ref": "#/components/schemas/SubscriptionId"
+                }
+              },
+              "required": [
+                "subscription",
+                "operation",
+                "module",
+                "event",
+                "state"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "result"
+          ],
+          "type": "object"
+        },
+        "title": "legacy_module.ticked subscribed",
+        "x-logos-event": "ticked",
+        "x-logos-module": "legacy_module",
+        "x-logos-untyped": true
+      },
+      "mini_module.added.event": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/subscriptionId"
+        },
+        "name": "mini_module.added.event",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "rpc.event"
+            },
+            "params": {
+              "additionalProperties": false,
+              "properties": {
+                "data": {
+                  "additionalItems": false,
+                  "description": "The event's parameters, by position.",
+                  "items": [
+                    {
+                      "$ref": "#/components/schemas/mini_module.Note"
+                    }
+                  ],
+                  "maxItems": 1,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "event": {
+                  "const": "added"
+                },
+                "generation": {
+                  "$ref": "#/components/schemas/EventGeneration"
+                },
+                "module": {
+                  "const": "mini_module"
+                },
+                "subscription": {
+                  "$ref": "#/components/schemas/SubscriptionId"
+                },
+                "ts": {
+                  "$ref": "#/components/schemas/EventTimestamp"
+                }
+              },
+              "required": [
+                "subscription",
+                "module",
+                "event",
+                "data",
+                "generation",
+                "ts"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        "summary": "Emitted after put() stores a note.",
+        "title": "mini_module.added",
+        "x-logos-event": "added",
+        "x-logos-module": "mini_module",
+        "x-logos-params": [
+          "note"
+        ]
+      },
+      "mini_module.added.subscribe": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "mini_module.added.subscribe",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "rpc.subscribe"
+            },
+            "params": {
+              "additionalProperties": false,
+              "properties": {
+                "event": {
+                  "const": "added"
+                },
+                "module": {
+                  "const": "mini_module"
+                },
+                "subscription": {
+                  "$ref": "#/components/schemas/SubscriptionId"
+                }
+              },
+              "required": [
+                "subscription",
+                "module",
+                "event"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        "title": "Subscribe to mini_module.added",
+        "x-logos-event": "added",
+        "x-logos-module": "mini_module"
+      },
+      "mini_module.added.subscribed": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "mini_module.added.subscribed",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "result": {
+              "additionalProperties": false,
+              "properties": {
+                "event": {
+                  "const": "added"
+                },
+                "module": {
+                  "const": "mini_module"
+                },
+                "operation": {
+                  "const": "subscribe"
+                },
+                "state": {
+                  "$ref": "#/components/schemas/SubscriptionState"
+                },
+                "subscription": {
+                  "$ref": "#/components/schemas/SubscriptionId"
+                }
+              },
+              "required": [
+                "subscription",
+                "operation",
+                "module",
+                "event",
+                "state"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "result"
+          ],
+          "type": "object"
+        },
+        "title": "mini_module.added subscribed",
+        "x-logos-event": "added",
+        "x-logos-module": "mini_module"
+      },
+      "mini_module.clear.request": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "mini_module.clear.request",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "mini_module.clear"
+            },
+            "params": {
+              "$ref": "#/components/schemas/NoParams"
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "method"
+          ],
+          "type": "object"
+        },
+        "summary": "Forget every note.",
+        "title": "Call mini_module.clear",
+        "x-logos-method": "clear",
+        "x-logos-module": "mini_module"
+      },
+      "mini_module.clear.result": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "mini_module.clear.result",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "result": {
+              "anyOf": [
+                {
+                  "const": true
+                },
+                {
+                  "$ref": "#/components/schemas/ProviderRejection"
+                }
+              ]
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "result"
+          ],
+          "type": "object"
+        },
+        "summary": "The value mini_module.clear returned, or a ProviderRejection.",
+        "title": "mini_module.clear result",
+        "x-logos-method": "clear",
+        "x-logos-module": "mini_module"
+      },
+      "mini_module.find.request": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "mini_module.find.request",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "mini_module.find"
+            },
+            "params": {
+              "oneOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "prefix": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalItems": false,
+                  "items": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  ],
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                }
+              ]
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        "summary": "Look a note up.",
+        "title": "Call mini_module.find",
+        "x-logos-method": "find",
+        "x-logos-module": "mini_module"
+      },
+      "mini_module.find.result": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "mini_module.find.result",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "result": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/LogosResult"
+                },
+                {
+                  "$ref": "#/components/schemas/ProviderRejection"
+                }
+              ]
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "result"
+          ],
+          "type": "object"
+        },
+        "summary": "The value mini_module.find returned, or a ProviderRejection.",
+        "title": "mini_module.find result",
+        "x-logos-method": "find",
+        "x-logos-module": "mini_module"
+      },
+      "mini_module.lidl.request": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "mini_module.lidl.request",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "mini_module.lidl"
+            },
+            "params": {
+              "$ref": "#/components/schemas/NoParams"
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "method"
+          ],
+          "type": "object"
+        },
+        "summary": "The module's canonical LIDL interface document.",
+        "title": "Call mini_module.lidl",
+        "x-logos-derived": true,
+        "x-logos-method": "lidl",
+        "x-logos-module": "mini_module"
+      },
+      "mini_module.lidl.result": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "mini_module.lidl.result",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "result": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/components/schemas/ProviderRejection"
+                }
+              ]
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "result"
+          ],
+          "type": "object"
+        },
+        "summary": "The value mini_module.lidl returned, or a ProviderRejection.",
+        "title": "mini_module.lidl result",
+        "x-logos-derived": true,
+        "x-logos-method": "lidl",
+        "x-logos-module": "mini_module"
+      },
+      "mini_module.name.request": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "mini_module.name.request",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "mini_module.name"
+            },
+            "params": {
+              "$ref": "#/components/schemas/NoParams"
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "method"
+          ],
+          "type": "object"
+        },
+        "summary": "The module's name, as declared in its metadata.",
+        "title": "Call mini_module.name",
+        "x-logos-derived": true,
+        "x-logos-method": "name",
+        "x-logos-module": "mini_module"
+      },
+      "mini_module.name.result": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "mini_module.name.result",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "result": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/components/schemas/ProviderRejection"
+                }
+              ]
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "result"
+          ],
+          "type": "object"
+        },
+        "summary": "The value mini_module.name returned, or a ProviderRejection.",
+        "title": "mini_module.name result",
+        "x-logos-derived": true,
+        "x-logos-method": "name",
+        "x-logos-module": "mini_module"
+      },
+      "mini_module.put.request": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "mini_module.put.request",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "mini_module.put"
+            },
+            "params": {
+              "oneOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "note": {
+                      "$ref": "#/components/schemas/mini_module.Note"
+                    }
+                  },
+                  "required": [
+                    "note"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalItems": false,
+                  "items": [
+                    {
+                      "$ref": "#/components/schemas/mini_module.Note"
+                    }
+                  ],
+                  "maxItems": 1,
+                  "minItems": 1,
+                  "type": "array"
+                }
+              ]
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        "summary": "Store a note and return it as stored.",
+        "title": "Call mini_module.put",
+        "x-logos-method": "put",
+        "x-logos-module": "mini_module"
+      },
+      "mini_module.put.result": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "mini_module.put.result",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "result": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/mini_module.Note"
+                },
+                {
+                  "$ref": "#/components/schemas/ProviderRejection"
+                }
+              ]
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "result"
+          ],
+          "type": "object"
+        },
+        "summary": "The value mini_module.put returned, or a ProviderRejection.",
+        "title": "mini_module.put result",
+        "x-logos-method": "put",
+        "x-logos-module": "mini_module"
+      },
+      "mini_module.version.request": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "mini_module.version.request",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "mini_module.version"
+            },
+            "params": {
+              "$ref": "#/components/schemas/NoParams"
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "method"
+          ],
+          "type": "object"
+        },
+        "summary": "The module's version, as declared in its metadata.",
+        "title": "Call mini_module.version",
+        "x-logos-derived": true,
+        "x-logos-method": "version",
+        "x-logos-module": "mini_module"
+      },
+      "mini_module.version.result": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "mini_module.version.result",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "result": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/components/schemas/ProviderRejection"
+                }
+              ]
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "result"
+          ],
+          "type": "object"
+        },
+        "summary": "The value mini_module.version returned, or a ProviderRejection.",
+        "title": "mini_module.version result",
+        "x-logos-derived": true,
+        "x-logos-method": "version",
+        "x-logos-module": "mini_module"
+      },
+      "rpc.error": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "description": "The bridge refused or could not complete a request. Denied, unexposed and unknown targets all get the same -32601.",
+        "name": "rpc.error",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "error": {
+              "$ref": "#/components/schemas/JsonRpcError"
+            },
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "error"
+          ],
+          "type": "object"
+        },
+        "summary": "The bridge refused or could not complete a request.",
+        "title": "JSON-RPC error",
+        "x-logos-bridge-op": true
+      },
+      "rpc.subscription_terminated": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/subscriptionId"
+        },
+        "name": "rpc.subscription_terminated",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "rpc.subscription_terminated"
+            },
+            "params": {
+              "additionalProperties": false,
+              "properties": {
+                "event": {
+                  "type": "string"
+                },
+                "module": {
+                  "type": "string"
+                },
+                "reason": {
+                  "description": "provider_unavailable (the provider went away) or provider_changed (a different build replaced it); other reasons may be added.",
+                  "type": "string"
+                },
+                "subscription": {
+                  "$ref": "#/components/schemas/SubscriptionId"
+                }
+              },
+              "required": [
+                "subscription",
+                "module",
+                "event",
+                "reason"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        "title": "Subscription terminated",
+        "x-logos-bridge-op": true
+      },
+      "rpc.unsubscribe": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "rpc.unsubscribe",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "rpc.unsubscribe"
+            },
+            "params": {
+              "additionalProperties": false,
+              "properties": {
+                "subscription": {
+                  "$ref": "#/components/schemas/SubscriptionId"
+                }
+              },
+              "required": [
+                "subscription"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        "title": "Unsubscribe",
+        "x-logos-bridge-op": true
+      },
+      "rpc.unsubscribed": {
+        "correlationId": {
+          "$ref": "#/components/correlationIds/requestId"
+        },
+        "name": "rpc.unsubscribed",
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/JsonRpcId"
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "result": {
+              "additionalProperties": false,
+              "properties": {
+                "operation": {
+                  "const": "unsubscribe"
+                },
+                "subscription": {
+                  "$ref": "#/components/schemas/SubscriptionId"
+                }
+              },
+              "required": [
+                "subscription",
+                "operation"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "result"
+          ],
+          "type": "object"
+        },
+        "summary": "The subscription is gone (or never was).",
+        "title": "Unsubscribed",
+        "x-logos-bridge-op": true
+      }
+    },
+    "schemas": {
+      "Bytes": {
+        "additionalProperties": false,
+        "description": "A LIDL bstr: the bytes as base64url without padding (RFC 4648 section 5), carried as the object's only key. Do not name a map key \"_bytes\".",
+        "properties": {
+          "_bytes": {
+            "pattern": "^[A-Za-z0-9_-]*$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "_bytes"
+        ],
+        "title": "Bytes",
+        "type": "object"
+      },
+      "EventGeneration": {
+        "description": "The upstream subscription's incarnation; it grows each time the provider is lost.",
+        "minimum": 0,
+        "title": "EventGeneration",
+        "type": "integer"
+      },
+      "EventTimestamp": {
+        "description": "Delivery time, in milliseconds since the Unix epoch.",
+        "minimum": 0,
+        "title": "EventTimestamp",
+        "type": "integer"
+      },
+      "JsonRpcError": {
+        "description": "A JSON-RPC 2.0 error object, with the Logos error taxonomy in data.",
+        "properties": {
+          "code": {
+            "type": "integer"
+          },
+          "data": {
+            "properties": {
+              "invalid_params_detail": {
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "description": "schema-mismatch, malformed-cbor or non-deterministic-cbor.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reason"
+                ],
+                "type": "object"
+              },
+              "logos_error_code": {
+                "type": "integer"
+              },
+              "logos_error_name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "logos_error_code",
+              "logos_error_name"
+            ],
+            "type": "object"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "JsonRpcError",
+        "type": "object"
+      },
+      "JsonRpcId": {
+        "description": "A JSON-RPC request id; a reply echoes it.",
+        "title": "JsonRpcId",
+        "type": [
+          "string",
+          "number",
+          "null"
+        ]
+      },
+      "LogosResult": {
+        "description": "A LIDL result. A provider that ran and failed answers success=false here: an application failure is a successful call, never a JSON-RPC error.",
+        "properties": {
+          "error": {
+            "description": "The failure message as a string; null when there is none."
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "value": {
+            "description": "The payload; any JSON value, null when absent."
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "LogosResult",
+        "type": "object"
+      },
+      "NoParams": {
+        "description": "No parameters: an empty object or an empty array.",
+        "oneOf": [
+          {
+            "maxProperties": 0,
+            "type": "object"
+          },
+          {
+            "maxItems": 0,
+            "type": "array"
+          }
+        ],
+        "title": "NoParams"
+      },
+      "ProviderRejection": {
+        "additionalProperties": false,
+        "description": "The provider refused the call and said why. It arrives as the call's result, not as a JSON-RPC error.",
+        "properties": {
+          "code": {
+            "description": "Known codes: dispatch_failed (the argument values were refused), invalid_args (wrong argument count), unknown_method (reserved; not emitted yet). Treat any other code as a refusal too.",
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "origin": {
+            "description": "The module that refused.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "origin"
+        ],
+        "title": "ProviderRejection",
+        "type": "object"
+      },
+      "SubscriptionId": {
+        "description": "The caller-assigned subscription id.",
+        "title": "SubscriptionId",
+        "type": [
+          "string",
+          "number"
+        ]
+      },
+      "SubscriptionState": {
+        "description": "registered: the upstream subscription is held and arms when the provider appears. active: this connection already held the id, so nothing new was registered and nothing is delivered twice.",
+        "enum": [
+          "registered",
+          "active"
+        ],
+        "title": "SubscriptionState",
+        "type": "string"
+      },
+      "mini_module.Note": {
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/Bytes"
+          },
+          "id": {
+            "type": "string"
+          },
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "body"
+        ],
+        "title": "Note",
+        "type": "object"
+      }
+    }
+  },
+  "defaultContentType": "application/json",
+  "info": {
+    "description": "The WebSocket endpoint of the Logos JSON-RPC bridge. Operations are the bridge's: it receives requests, each answered by a reply carrying the result or an rpc.error, and it sends event notifications and subscription terminations. Replies are correlated with requests by the JSON-RPC id, events by the caller-assigned subscription id. Module methods use the `<module>.<method>` alias of rpc.call, typed from the module's canonical LIDL contract when it has one (x-logos-untyped marks names-only modules). The other bridge operations (rpc.call, rpc.schema, rpc.ping, ...) are described by rpc.discover.",
+    "title": "Logos JSON-RPC bridge",
+    "version": "0.1.0"
+  },
+  "operations": {
+    "broken_module.lidl": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/ws"
+      },
+      "description": "Untyped: the module's lidl() contract was refused (see interface_error in x-logos-modules), so only names are known.\n\nBuilt-in: always callable for an exposed module, whatever this bridge's method policy.",
+      "messages": [
+        {
+          "$ref": "#/channels/ws/messages/broken_module.lidl.request"
+        }
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/ws"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/ws/messages/broken_module.lidl.result"
+          },
+          {
+            "$ref": "#/channels/ws/messages/rpc.error"
+          }
+        ]
+      },
+      "summary": "Untyped: the module's lidl() contract was refused (see interface_error in x-logos-modules), so only names are known.",
+      "tags": [
+        {
+          "name": "broken_module"
+        }
+      ],
+      "title": "broken_module.lidl",
+      "x-logos-method": "lidl",
+      "x-logos-module": "broken_module",
+      "x-logos-untyped": true
+    },
+    "broken_module.reset": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/ws"
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/ws/messages/broken_module.reset.request"
+        }
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/ws"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/ws/messages/broken_module.reset.result"
+          },
+          {
+            "$ref": "#/channels/ws/messages/rpc.error"
+          }
+        ]
+      },
+      "summary": "Untyped: the module's lidl() contract was refused (see interface_error in x-logos-modules), so only names are known.",
+      "tags": [
+        {
+          "name": "broken_module"
+        }
+      ],
+      "title": "broken_module.reset",
+      "x-logos-method": "reset",
+      "x-logos-module": "broken_module",
+      "x-logos-untyped": true
+    },
+    "legacy_module.add": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/ws"
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/ws/messages/legacy_module.add.request"
+        }
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/ws"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/ws/messages/legacy_module.add.result"
+          },
+          {
+            "$ref": "#/channels/ws/messages/rpc.error"
+          }
+        ]
+      },
+      "summary": "Untyped: the module publishes no lidl() contract, so only names are known.",
+      "tags": [
+        {
+          "name": "legacy_module"
+        }
+      ],
+      "title": "legacy_module.add",
+      "x-logos-method": "add",
+      "x-logos-module": "legacy_module",
+      "x-logos-untyped": true
+    },
+    "legacy_module.ping": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/ws"
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/ws/messages/legacy_module.ping.request"
+        }
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/ws"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/ws/messages/legacy_module.ping.result"
+          },
+          {
+            "$ref": "#/channels/ws/messages/rpc.error"
+          }
+        ]
+      },
+      "summary": "Untyped: the module publishes no lidl() contract, so only names are known.",
+      "tags": [
+        {
+          "name": "legacy_module"
+        }
+      ],
+      "title": "legacy_module.ping",
+      "x-logos-method": "ping",
+      "x-logos-module": "legacy_module",
+      "x-logos-untyped": true
+    },
+    "legacy_module.ticked.event": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/ws"
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/ws/messages/legacy_module.ticked.event"
+        }
+      ],
+      "summary": "Untyped: the module publishes no lidl() contract, so only names are known.",
+      "tags": [
+        {
+          "name": "legacy_module"
+        }
+      ],
+      "title": "legacy_module.ticked",
+      "x-logos-event": "ticked",
+      "x-logos-module": "legacy_module",
+      "x-logos-untyped": true
+    },
+    "legacy_module.ticked.subscribe": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/ws"
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/ws/messages/legacy_module.ticked.subscribe"
+        }
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/ws"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/ws/messages/legacy_module.ticked.subscribed"
+          },
+          {
+            "$ref": "#/channels/ws/messages/rpc.error"
+          }
+        ]
+      },
+      "summary": "Subscribe to legacy_module.ticked with a caller-assigned subscription id.",
+      "tags": [
+        {
+          "name": "legacy_module"
+        }
+      ],
+      "title": "Subscribe to legacy_module.ticked",
+      "x-logos-event": "ticked",
+      "x-logos-module": "legacy_module",
+      "x-logos-untyped": true
+    },
+    "mini_module.added.event": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/ws"
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/ws/messages/mini_module.added.event"
+        }
+      ],
+      "summary": "Emitted after put() stores a note.",
+      "tags": [
+        {
+          "name": "mini_module"
+        }
+      ],
+      "title": "mini_module.added",
+      "x-logos-event": "added",
+      "x-logos-module": "mini_module"
+    },
+    "mini_module.added.subscribe": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/ws"
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/ws/messages/mini_module.added.subscribe"
+        }
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/ws"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/ws/messages/mini_module.added.subscribed"
+          },
+          {
+            "$ref": "#/channels/ws/messages/rpc.error"
+          }
+        ]
+      },
+      "summary": "Subscribe to mini_module.added with a caller-assigned subscription id.",
+      "tags": [
+        {
+          "name": "mini_module"
+        }
+      ],
+      "title": "Subscribe to mini_module.added",
+      "x-logos-event": "added",
+      "x-logos-module": "mini_module"
+    },
+    "mini_module.clear": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/ws"
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/ws/messages/mini_module.clear.request"
+        }
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/ws"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/ws/messages/mini_module.clear.result"
+          },
+          {
+            "$ref": "#/channels/ws/messages/rpc.error"
+          }
+        ]
+      },
+      "summary": "Forget every note.",
+      "tags": [
+        {
+          "name": "mini_module"
+        }
+      ],
+      "title": "mini_module.clear",
+      "x-logos-method": "clear",
+      "x-logos-module": "mini_module"
+    },
+    "mini_module.find": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/ws"
+      },
+      "description": "Look a note up. An unknown id is success=false, not an error.",
+      "messages": [
+        {
+          "$ref": "#/channels/ws/messages/mini_module.find.request"
+        }
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/ws"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/ws/messages/mini_module.find.result"
+          },
+          {
+            "$ref": "#/channels/ws/messages/rpc.error"
+          }
+        ]
+      },
+      "summary": "Look a note up.",
+      "tags": [
+        {
+          "name": "mini_module"
+        }
+      ],
+      "title": "mini_module.find",
+      "x-logos-method": "find",
+      "x-logos-module": "mini_module"
+    },
+    "mini_module.lidl": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/ws"
+      },
+      "description": "The module's canonical LIDL interface document.\n\nReturns this module's full canonical LIDL contract: the exact `.lidl` text its build published, never filtered by this bridge's policy.\n\nBuilt-in: always callable for an exposed module, whatever this bridge's method policy.",
+      "messages": [
+        {
+          "$ref": "#/channels/ws/messages/mini_module.lidl.request"
+        }
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/ws"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/ws/messages/mini_module.lidl.result"
+          },
+          {
+            "$ref": "#/channels/ws/messages/rpc.error"
+          }
+        ]
+      },
+      "summary": "The module's canonical LIDL interface document.",
+      "tags": [
+        {
+          "name": "mini_module"
+        }
+      ],
+      "title": "mini_module.lidl",
+      "x-logos-derived": true,
+      "x-logos-method": "lidl",
+      "x-logos-module": "mini_module"
+    },
+    "mini_module.name": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/ws"
+      },
+      "description": "The module's name, as declared in its metadata.\n\nBuilt-in: always callable for an exposed module, whatever this bridge's method policy.",
+      "messages": [
+        {
+          "$ref": "#/channels/ws/messages/mini_module.name.request"
+        }
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/ws"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/ws/messages/mini_module.name.result"
+          },
+          {
+            "$ref": "#/channels/ws/messages/rpc.error"
+          }
+        ]
+      },
+      "summary": "The module's name, as declared in its metadata.",
+      "tags": [
+        {
+          "name": "mini_module"
+        }
+      ],
+      "title": "mini_module.name",
+      "x-logos-derived": true,
+      "x-logos-method": "name",
+      "x-logos-module": "mini_module"
+    },
+    "mini_module.put": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/ws"
+      },
+      "description": "Store a note and return it as stored.\n\n```json\n{\"id\": \"n1\", \"body\": {\"_bytes\": \"aGk\"}}\n```",
+      "messages": [
+        {
+          "$ref": "#/channels/ws/messages/mini_module.put.request"
+        }
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/ws"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/ws/messages/mini_module.put.result"
+          },
+          {
+            "$ref": "#/channels/ws/messages/rpc.error"
+          }
+        ]
+      },
+      "summary": "Store a note and return it as stored.",
+      "tags": [
+        {
+          "name": "mini_module"
+        }
+      ],
+      "title": "mini_module.put",
+      "x-logos-method": "put",
+      "x-logos-module": "mini_module"
+    },
+    "mini_module.version": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/ws"
+      },
+      "description": "The module's version, as declared in its metadata.\n\nBuilt-in: always callable for an exposed module, whatever this bridge's method policy.",
+      "messages": [
+        {
+          "$ref": "#/channels/ws/messages/mini_module.version.request"
+        }
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/ws"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/ws/messages/mini_module.version.result"
+          },
+          {
+            "$ref": "#/channels/ws/messages/rpc.error"
+          }
+        ]
+      },
+      "summary": "The module's version, as declared in its metadata.",
+      "tags": [
+        {
+          "name": "mini_module"
+        }
+      ],
+      "title": "mini_module.version",
+      "x-logos-derived": true,
+      "x-logos-method": "version",
+      "x-logos-module": "mini_module"
+    },
+    "rpc.subscription_terminated": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/ws"
+      },
+      "description": "The provider went away or was replaced by a different build, so the subscription ended rather than silently resuming with a gap. Subscribe again (with any id) to resume, and refetch state.",
+      "messages": [
+        {
+          "$ref": "#/channels/ws/messages/rpc.subscription_terminated"
+        }
+      ],
+      "summary": "Tell a subscriber its subscription ended.",
+      "title": "rpc.subscription_terminated",
+      "x-logos-bridge-op": true
+    },
+    "rpc.unsubscribe": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/ws"
+      },
+      "description": "Stops the subscription with this caller-assigned id. Idempotent: an unknown id is acknowledged too.",
+      "messages": [
+        {
+          "$ref": "#/channels/ws/messages/rpc.unsubscribe"
+        }
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/ws"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/ws/messages/rpc.unsubscribed"
+          },
+          {
+            "$ref": "#/channels/ws/messages/rpc.error"
+          }
+        ]
+      },
+      "summary": "Drop a subscription.",
+      "title": "rpc.unsubscribe",
+      "x-logos-bridge-op": true
+    }
+  },
+  "servers": {
+    "bridge": {
+      "description": "Loopback only. Text frames only; Host and Origin are checked on the upgrade.",
+      "host": "127.0.0.1:8645",
+      "protocol": "ws"
+    }
+  },
+  "x-logos-modules": [
+    {
+      "contract_sha256": "68bde1680866ea0e450ed711e334e8c70013110eddb8889887cba029232e1f7c",
+      "exposure": {
+        "events": [
+          "added"
+        ],
+        "methods": [
+          "put",
+          "find",
+          "clear",
+          "name",
+          "version",
+          "lidl"
+        ]
+      },
+      "interface_sha256": "589b01b9cbf84ab916d6d804868780c7c0e5d92063ee3b60061a55f330ff42ca",
+      "name": "mini_module",
+      "status": "ok"
+    },
+    {
+      "exposure": {
+        "events": [
+          "ticked"
+        ],
+        "methods": [
+          "ping",
+          "add"
+        ]
+      },
+      "name": "legacy_module",
+      "status": "untyped"
+    },
+    {
+      "exposure": {
+        "events": [],
+        "methods": [
+          "reset",
+          "lidl"
+        ]
+      },
+      "interface_error": "3:17: expected ')' (lidl reader 1f54a2a)",
+      "name": "broken_module",
+      "status": "invalid"
+    },
+    {
+      "exposure": {
+        "events": [],
+        "methods": []
+      },
+      "name": "late_module",
+      "status": "pending"
+    }
+  ],
+  "x-logos-ws-close-codes": [
+    {
+      "code": 1003,
+      "description": "Binary frame refused: the bridge accepts text frames only.",
+      "name": "unsupported_data"
+    },
+    {
+      "code": 1006,
+      "description": "Bridge stopped: connections are dropped without a close frame. 1006 is what a client reports; it is never sent.",
+      "name": "abnormal_closure"
+    },
+    {
+      "code": 1008,
+      "description": "Outbound queue overflow: more than max_queued_frames_per_connection (256) frames were waiting. A slow reader is closed rather than silently missing events.",
+      "name": "policy_violation"
+    },
+    {
+      "code": 1009,
+      "description": "Inbound message larger than max_frame_bytes (1048576 bytes).",
+      "name": "message_too_big"
+    }
+  ]
+}

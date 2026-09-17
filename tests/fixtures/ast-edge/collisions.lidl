@@ -1,0 +1,13 @@
+module collisions_module {
+  depends []
+
+  type TickEvent {
+    n: int
+  }
+
+  method fooBar()
+  method foo_bar()
+  method onTick()
+
+  event tick(t: TickEvent)
+}

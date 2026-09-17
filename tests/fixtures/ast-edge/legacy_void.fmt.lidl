@@ -1,0 +1,6 @@
+module legacy_void_module {
+  depends []
+
+  method reset() description "Forget everything."
+  method count() -> uint
+}

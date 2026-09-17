@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+
+jobs:
+  nix:
+    # ATTIC_TOKEN_PUBLIC only exists in the public-cache environment.
+    environment: ${{ github.ref == 'refs/heads/master' && 'public-cache' || '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64-linux
+            runner: ubuntu-latest
+          - arch: aarch64-linux
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    env:
+      SYSTEM: ${{ matrix.arch }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Nix and set up cache
+        uses: logos-co/setup-nix-cache-action@v1
+        with:
+          attic-token-ci: ${{ secrets.ATTIC_TOKEN_CI }}
+          attic-token-public: ${{ secrets.ATTIC_TOKEN_PUBLIC }}
+          extra-nix-config: |
+            experimental-features = nix-command flakes
+
+      # Each check below is one step, spelled `.#checks.$SYSTEM.<name>`. A check
+      # without a step would never run in CI, so the two lists must be equal.
+      - name: Every flake check has exactly one step
+        run: |
+          set -euo pipefail
+          nix eval --raw ".#checks.$SYSTEM" \
+            --apply 'c: builtins.concatStringsSep "\n" (builtins.attrNames c) + "\n"' \
+            | sort > flake-checks.txt
+          grep -oE '#checks\.\$SYSTEM\.[A-Za-z0-9_-]+' .github/workflows/ci.yml \
+            | sed 's/.*\.//' | sort > ci-steps.txt
+          test -s flake-checks.txt
+          diff -u flake-checks.txt ci-steps.txt
+          test -z "$(uniq -d ci-steps.txt)"
+
+      - name: Build package
+        run: nix build --print-build-logs
+
+      - name: Unit tests
+        run: nix build ".#checks.$SYSTEM.unit" --print-build-logs
+
+      - name: Unit tests (Python 3.10)
+        run: nix build ".#checks.$SYSTEM.unit-py310" --print-build-logs
+
+      - name: Type check (mypy --strict over src, goldens and tests/typing)
+        run: nix build ".#checks.$SYSTEM.typecheck" --print-build-logs
+
+      - name: Golden clients (regenerated, and identical on Python 3.10 and 3.13)
+        run: nix build ".#checks.$SYSTEM.codegen-golden" --print-build-logs
+
+      - name: Fixture drift (vendored ASTs and Python mirrors vs the pinned lidl)
+        run: nix build ".#checks.$SYSTEM.fixtures-drift" --print-build-logs
+
+      - name: LIDL reader compatibility
+        run: nix build ".#checks.$SYSTEM.lidl-compat" --print-build-logs
+
+      # A real bridge under a logoscore daemon; loopback only, so it runs in the sandbox.
+      - name: Integration (live bridge, providers, lifecycle canary)
+        run: nix build ".#checks.$SYSTEM.integration" --print-build-logs
+
+      - name: Integration (the bridge's documents against the renderer, meta-schemas and traffic)
+        run: nix build ".#checks.$SYSTEM.integration-docs" --print-build-logs
+
+  pip:
+    name: pip (Python ${{ matrix.python }}, websockets ${{ matrix.websockets }})
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+        websockets: ["15.0.*", "latest"]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      # `test` brings pytest; `docs-test` brings the jsonschema the docs helpers' tests need.
+      - name: Install the package and its test extras
+        env:
+          WEBSOCKETS: ${{ matrix.websockets }}
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          if [ "$WEBSOCKETS" = latest ]; then
+            python -m pip install ".[test,docs-test]"
+            python -m pip install --upgrade websockets
+          else
+            python -m pip install ".[test,docs-test]" "websockets==$WEBSOCKETS"
+          fi
+          python -m pip list
+
+      # Runs against the installed wheel: src/ is not on the path.
+      - name: Unit tests
+        run: python -m pytest tests/unit -v -p no:cacheprovider
+
+      # mypy runs in the nix job; here the goldens' annotations are evaluated and compared at runtime.
+      - name: Generated-client typing (runtime fallback)
+        run: python -m pytest tests/typing -v -p no:cacheprovider

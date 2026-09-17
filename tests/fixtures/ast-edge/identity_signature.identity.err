@@ -1,0 +1,1 @@
+identity_signature.lidl: module 'identity_signature_module' declares 'name(x) -> ', but 'name' is reserved for module identity and must be 'name() -> tstr'

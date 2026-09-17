@@ -1,0 +1,5 @@
+module identity_lidl_module {
+  depends []
+
+  method lidl() -> tstr
+}

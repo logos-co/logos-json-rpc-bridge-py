@@ -1,0 +1,19 @@
+module mini_module {
+  version "0.1.0"
+  description "A small contract for the multi-module golden."
+  category "testing"
+  depends []
+
+  type Note {
+    id: tstr
+    body: bstr
+    ? title: tstr
+    tag: ? tstr
+  }
+
+  method put(note: Note) -> Note description "Store a note and return it as stored.\n\n@code{.json}\n{\"id\": \"n1\", \"body\": {\"_bytes\": \"aGk\"}}\n@endcode"
+  method find(id: tstr, prefix: ? tstr) -> result description "Look a note up. An unknown id is success=false, not an error."
+  method clear() description "Forget every note."
+
+  event added(note: Note) description "Emitted after put() stores a note."
+}

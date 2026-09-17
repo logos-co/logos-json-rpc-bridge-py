@@ -1,0 +1,56 @@
+module test_fullapi_cpp {
+  version "1.0.0"
+  description "Universal C++ provider exercising every supported method parameter type, return type, and event parameter type. Reference implementation of the full_api contract; mirrored 1:1 by the Rust provider test_fullapi_rust so the same interface can be bound to either."
+  category "testing"
+  depends []
+
+  method whoAmI() -> tstr
+  method echoString(v: tstr) -> tstr
+  method echoBytes(v: bstr) -> bstr
+  method echoInt(v: int) -> int
+  method echoUint(v: uint) -> uint
+  method echoDouble(v: float64) -> float64
+  method echoBool(v: bool) -> bool
+  method echoAny(v: any) -> any
+  method echoStringList(v: [tstr]) -> [tstr]
+  method echoIntList(v: [int]) -> [int]
+  method echoUintList(v: [uint]) -> [uint]
+  method echoDoubleList(v: [float64]) -> [float64]
+  method echoBoolList(v: [bool]) -> [bool]
+  method echoList(v: [any]) -> [any]
+  method echoMap(v: {tstr: any}) -> {tstr: any}
+  method echoTriple(i: int, s: tstr, b: bstr) -> tstr
+  method doVoid()
+  method makeResult(ok: bool) -> result
+  method fireStringEvent(v: tstr) -> bool
+  method fireBytesEvent(v: bstr) -> bool
+  method fireIntEvent(v: int) -> bool
+  method fireUintEvent(v: uint) -> bool
+  method fireDoubleEvent(v: float64) -> bool
+  method fireBoolEvent(v: bool) -> bool
+  method fireAnyEvent(v: any) -> bool
+  method fireStringListEvent(v: [tstr]) -> bool
+  method fireIntListEvent(v: [int]) -> bool
+  method fireUintListEvent(v: [uint]) -> bool
+  method fireDoubleListEvent(v: [float64]) -> bool
+  method fireBoolListEvent(v: [bool]) -> bool
+  method fireListEvent(v: [any]) -> bool
+  method fireMapEvent(v: {tstr: any}) -> bool
+  method fireTripleEvent(i: int, s: tstr, b: bstr) -> bool
+
+  event stringEvent(v: tstr)
+  event bytesEvent(v: bstr)
+  event intEvent(v: int)
+  event uintEvent(v: uint)
+  event doubleEvent(v: float64)
+  event boolEvent(v: bool)
+  event anyEvent(v: any)
+  event stringListEvent(v: [tstr])
+  event intListEvent(v: [int])
+  event uintListEvent(v: [uint])
+  event doubleListEvent(v: [float64])
+  event boolListEvent(v: [bool])
+  event listEvent(v: [any])
+  event mapEvent(v: {tstr: any})
+  event tripleEvent(i: int, s: tstr, b: bstr)
+}

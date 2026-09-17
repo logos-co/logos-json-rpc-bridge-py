@@ -1,0 +1,29 @@
+module recursive_module {
+  depends []
+
+  type Node {
+    value: int
+    children: [Node]
+    ? parent: Node
+  }
+
+  type Loop {
+    next: Loop
+  }
+
+  type Pair {
+    left: Tree
+    right: ? Tree
+  }
+
+  type Tree {
+    pair: ? Pair
+    leaf: ? int
+  }
+
+  method walk(root: Node) -> [Node]
+  method spin(l: ? Loop) -> ? Loop
+  method grow(t: Tree) -> {tstr: [Tree]}
+
+  event grown(node: Node, depth: uint)
+}

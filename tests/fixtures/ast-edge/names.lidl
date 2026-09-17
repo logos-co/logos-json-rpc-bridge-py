@@ -1,0 +1,25 @@
+module names_module {
+  depends []
+
+  type str {
+    class: tstr
+    ? from: int
+    int: bool
+    self: tstr
+    meta: tstr
+    __init__: tstr
+    _bytes: bstr
+    list: [str]
+  }
+
+  method import(lambda: tstr, timeout: int, self: bool) -> str
+  method events() -> [tstr]
+  method check_compat() -> bool
+  method bridge() -> tstr
+  method print(type: tstr, id: int, str: ? str) -> tstr
+  method None()
+  method async(await: tstr) -> {tstr: str}
+
+  event class(meta: tstr, type: int)
+  event module(str: str)
+}

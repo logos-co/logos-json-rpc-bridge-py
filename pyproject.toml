@@ -1,0 +1,87 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "logos-bridge"
+version = "0.1.0"
+description = "Python client for logos-json-rpc-bridge: call Logos module methods and subscribe to their events over JSON-RPC 2.0, typed from their LIDL contracts."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT OR Apache-2.0" }
+license-files = ["LICENSE-MIT", "LICENSE-APACHE-v2"]
+authors = [
+  { name = "Logos", email = "info@logos.co" },
+]
+keywords = ["logos", "json-rpc", "websocket", "modules", "bridge", "lidl", "codegen"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Framework :: AsyncIO",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: MacOS",
+  "License :: OSI Approved :: MIT License",
+  "License :: OSI Approved :: Apache Software License",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: Software Development :: Code Generators",
+  "Typing :: Typed",
+]
+dependencies = ["websockets>=15.0"]
+
+[project.optional-dependencies]
+test = ["pytest>=7", "mypy", "typing_extensions"]
+docs-test = ["jsonschema>=4.18"]
+
+[project.scripts]
+logos-bridge-codegen = "logos_bridge.codegen.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/logos-co/logos-json-rpc-bridge-py"
+Documentation = "https://github.com/logos-co/logos-json-rpc-bridge-py#readme"
+Repository = "https://github.com/logos-co/logos-json-rpc-bridge-py"
+Issues = "https://github.com/logos-co/logos-json-rpc-bridge-py/issues"
+"JSON-RPC bridge" = "https://github.com/logos-co/logos-json-rpc-bridge"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/logos_bridge"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "src/logos_bridge",
+  "tests",
+  "README.md",
+  "LICENSE-MIT",
+  "LICENSE-APACHE-v2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The goldens are generated modules (test_*_client.py), not tests.
+norecursedirs = [".*", "__pycache__", "build", "dist", "fixtures", "goldens"]
+addopts = "-ra --strict-markers"
+faulthandler_timeout = 300
+filterwarnings = [
+  # websockets' ConnectionClosed.code/.reason are deprecated; this package reads rcvd/sent.
+  "error::DeprecationWarning",
+]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unreachable = true
+
+# The docs-test extra is optional; jsonschema ships no stubs.
+[[tool.mypy.overrides]]
+module = ["jsonschema", "jsonschema.*", "referencing", "referencing.*"]
+ignore_missing_imports = true
+
+# logos_bridge.testing.live drives logos-logoscore-py (not on PyPI), imported on first use.
+[[tool.mypy.overrides]]
+module = ["logoscore", "logoscore.*"]
+ignore_missing_imports = true

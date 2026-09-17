@@ -1,0 +1,81 @@
+# A json_rpc_bridge for development: a logoscore daemon with the test providers, until Ctrl-C.
+# Run it with `nix run .#dev-bridge -- [options]`, which sets up the stack (see README, Development).
+"""dev-bridge [--port N] [--provider NAME]... [--config FILE] [--revalidate-ms MS]
+
+Starts a logoscore daemon, loads the providers (test_fullapi_cpp and test_fullapi_ext_cpp
+by default) and json_rpc_bridge, starts the bridge on 127.0.0.1:PORT (8645 by default)
+exposing them, waits for their contracts, and prints the URLs. Ctrl-C (or SIGTERM)
+stops the bridge, the daemon and its module hosts.
+
+--config FILE is a bridge config (JSON) to use instead; its http.port is set from --port.
+The stack comes from the environment logos_bridge.testing.live reads.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import signal
+import sys
+import threading
+from pathlib import Path
+from types import FrameType
+
+from logos_bridge.testing.live import LiveBridge, LiveBridgeUnavailable, LiveStack, bridge_config, short_tmpdir_env
+
+PROVIDERS = ("test_fullapi_cpp", "test_fullapi_ext_cpp")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(prog="dev-bridge", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--port", type=int, default=8645)
+    parser.add_argument("--provider", action="append", dest="providers", metavar="NAME",
+                        help=f"a module to load and expose (default: {', '.join(PROVIDERS)})")
+    parser.add_argument("--config", type=Path, help="a bridge config (JSON) instead of exposing the providers")
+    parser.add_argument("--revalidate-ms", type=int, default=1000)
+    args = parser.parse_args()
+    providers = tuple(args.providers or PROVIDERS)
+    try:
+        stack = LiveStack.from_env()
+        config = (json.loads(args.config.read_text(encoding="utf-8")) if args.config
+                  else bridge_config(providers, revalidate_ms=args.revalidate_ms))
+    except (LiveBridgeUnavailable, OSError, ValueError) as exc:
+        print(f"dev-bridge: {exc}", file=sys.stderr)
+        return 2
+
+    stop = threading.Event()
+
+    def on_signal(signum: int, frame: FrameType | None) -> None:
+        stop.set()
+
+    signal.signal(signal.SIGINT, on_signal)
+    signal.signal(signal.SIGTERM, on_signal)
+    node = LiveBridge(stack, providers, label="dev-bridge")
+    with short_tmpdir_env("dev-bridge") as tmpdir:
+        try:
+            node.start(config, port=args.port)
+            info = node.info()
+            views = node.views()
+            print(f"dev-bridge: json_rpc_bridge {info.get('version')} at {node.http_url} and {node.ws_url}")
+            for module in node.exposed:
+                view = views.get(module, {})
+                print(f"  {module}: {view.get('interface_status')}"
+                      + (f" ({view['interface_error']})" if view.get("interface_error") else ""))
+            print(f"  lidl_reader {info.get('lidl_reader')}, protocol {info.get('protocol_version')}, "
+                  f"subscription_continuity {info.get('subscription_continuity')}")
+            # The daemon's sockets are found through TMPDIR, so other shells need the same one.
+            print(f"  logoscore commands: TMPDIR={tmpdir} logoscore --config-dir {node.config_dir} ...")
+            print("Ctrl-C stops the bridge and the daemon.", flush=True)
+            stop.wait()
+        except Exception as exc:  # noqa: BLE001 - a CLI reports, and still tears down
+            print(f"dev-bridge: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
+        finally:
+            node.stop()
+            print("dev-bridge: stopped", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

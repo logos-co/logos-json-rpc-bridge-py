@@ -1,0 +1,242 @@
+# Regenerate (or --check) the fixture files derived from .lidl sources with the pinned lidl CLI,
+# and check the Python mirrors (identity, validator, serializer) and SOURCES.md hashes against them.
+# Run through nix, from the repository root: `nix run .#regen-fixtures [-- --check]`.
+"""regen-fixtures [--check] [--lidl-cli PATH] [--root DIR] [--bridge DIR] [--test-modules DIR]
+
+Derived files:
+  tests/fixtures/ast/<m>.json                 lidl json --identity tests/fixtures/lidl/<m>.lidl
+  tests/fixtures/ast-edge/<m>.json            lidl json <m>.lidl
+  tests/fixtures/ast-edge/<m>.identity.json   lidl json --identity <m>.lidl (when it succeeds)
+  tests/fixtures/ast-edge/<m>.identity.err    its stderr (when it exits 4)
+  tests/fixtures/ast-edge/<m>.check.json      lidl check --json <m>.lidl
+  tests/fixtures/ast-edge/<m>.fmt.lidl        lidl fmt <m>.lidl (non-canonical sources only)
+
+With --bridge and --test-modules (the flake inputs' sources), the vendored copies
+must equal the files they were taken from. The bridge's meta-schemas are not vendored:
+checks.integration-docs reads them from the bridge input, so this checks that input's
+copy against its own SOURCES.md, and that no copy lives here.
+
+Exit status: 0 ok, 1 drift or a mirror mismatch, 2 usage.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+
+def run(cli: str, args: list[str], cwd: Path) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run([cli, *args], cwd=cwd, capture_output=True, check=False)
+
+
+def derive(cli: str, root: Path) -> dict[Path, bytes]:
+    out: dict[Path, bytes] = {}
+    lidl_dir = root / "tests/fixtures/lidl"
+    for source in sorted(lidl_dir.glob("*.lidl")):
+        proc = run(cli, ["json", "--identity", source.name], lidl_dir)
+        if proc.returncode != 0:
+            raise SystemExit(f"lidl json --identity {source.name}: {proc.stderr.decode()}")
+        out[root / "tests/fixtures/ast" / f"{source.stem}.json"] = proc.stdout
+    edge = root / "tests/fixtures/ast-edge"
+    for source in sorted(edge.glob("*.lidl")):
+        if source.name.endswith(".fmt.lidl"):
+            continue
+        stem = source.stem
+        plain = run(cli, ["json", source.name], edge)
+        if plain.returncode != 0:
+            raise SystemExit(f"lidl json {source.name}: {plain.stderr.decode()}")
+        out[edge / f"{stem}.json"] = plain.stdout
+        ident = run(cli, ["json", "--identity", source.name], edge)
+        if ident.returncode == 0:
+            out[edge / f"{stem}.identity.json"] = ident.stdout
+        elif ident.returncode == 4:
+            out[edge / f"{stem}.identity.err"] = ident.stderr
+        else:
+            raise SystemExit(f"lidl json --identity {source.name} exited {ident.returncode}")
+        check = run(cli, ["check", "--json", source.name], edge)
+        if check.returncode not in (0, 5):
+            raise SystemExit(f"lidl check {source.name} exited {check.returncode}")
+        out[edge / f"{stem}.check.json"] = check.stdout
+        fmt = run(cli, ["fmt", source.name], edge)
+        if fmt.returncode != 0:
+            raise SystemExit(f"lidl fmt {source.name}: {fmt.stderr.decode()}")
+        if fmt.stdout != source.read_bytes():
+            out[edge / f"{stem}.fmt.lidl"] = fmt.stdout
+    return out
+
+
+def stale_outputs(root: Path, derived: dict[Path, bytes]) -> list[Path]:
+    edge = root / "tests/fixtures/ast-edge"
+    pattern = re.compile(r".*\.(identity\.json|identity\.err|check\.json|fmt\.lidl)$")
+    handmade = {"forward.json", "legacy_ast.json"}
+    stale = [p for p in edge.iterdir() if pattern.match(p.name) and p not in derived]
+    stale += [p for p in edge.glob("*.json") if p.name not in handmade and p not in derived
+              and not pattern.match(p.name)]
+    stale += [p for p in (root / "tests/fixtures/ast").glob("*.json") if p not in derived]
+    return sorted(stale)
+
+
+def check_mirrors(cli: str, root: Path) -> list[str]:
+    sys.path.insert(0, str(root / "src"))
+    from logos_bridge.digest import canonical_json
+    from logos_bridge.lidl import IdentityError, Interface
+
+    problems: list[str] = []
+    for source in sorted((root / "tests/fixtures/lidl").glob("*.lidl")):
+        fmt = run(cli, ["fmt", source.name], source.parent)
+        if fmt.stdout != source.read_bytes():
+            problems.append(f"{source.name} is not canonical (lidl fmt differs)")
+        plain = run(cli, ["json", source.name], source.parent)
+        injected = Interface.loads(plain.stdout).with_identity()
+        expected = (root / "tests/fixtures/ast" / f"{source.stem}.json").read_bytes()
+        if canonical_json(injected.to_json()) + b"\n" != expected:
+            problems.append(f"identity mirror differs from the CLI for {source.name}")
+        if Interface.loads(expected).to_lidl().encode() != source.read_bytes():
+            problems.append(f"the serializer mirror differs from lidl fmt for {source.name}")
+    edge = root / "tests/fixtures/ast-edge"
+    for source in sorted(edge.glob("*.lidl")):
+        if source.name.endswith(".fmt.lidl"):
+            continue
+        stem = source.stem
+        interface = Interface.loads((edge / f"{stem}.json").read_bytes())
+        identity_json = edge / f"{stem}.identity.json"
+        try:
+            injected = interface.with_identity()
+        except IdentityError as exc:
+            err = edge / f"{stem}.identity.err"
+            want = err.read_text(encoding="utf-8") if err.exists() else "(CLI succeeded)"
+            if want != f"{source.name}: {exc}\n":
+                problems.append(f"identity error wording differs for {source.name}: {exc!s} vs {want!r}")
+        else:
+            if not identity_json.exists() or canonical_json(injected.to_json()) + b"\n" != identity_json.read_bytes():
+                problems.append(f"identity mirror differs from the CLI for {source.name}")
+        report = json.loads((edge / f"{stem}.check.json").read_bytes())
+        if interface.lidl_report() != report:
+            problems.append(f"validator mirror differs for {source.name}: {interface.lidl_report()} vs {report}")
+        fmt = edge / f"{stem}.fmt.lidl"
+        canonical = fmt.read_text(encoding="utf-8") if fmt.exists() else source.read_text(encoding="utf-8")
+        if interface.to_lidl() != canonical:
+            problems.append(f"the serializer mirror differs from lidl fmt for {source.name}")
+    return problems
+
+
+ROW = re.compile(r"^\|\s*`([^`]+)`\s*\|\s*`([0-9a-f]{64})`\s*\|")
+
+
+def check_recorded_hashes(root: Path) -> list[str]:
+    fixtures = root / "tests/fixtures"
+    problems = []
+    rows = 0
+    for line in (fixtures / "SOURCES.md").read_text(encoding="utf-8").splitlines():
+        match = ROW.match(line)
+        if not match:
+            continue
+        rows += 1
+        path = fixtures / match.group(1)
+        if not path.is_file():
+            problems.append(f"SOURCES.md lists a missing file: {match.group(1)}")
+        elif hashlib.sha256(path.read_bytes()).hexdigest() != match.group(2):
+            problems.append(f"{match.group(1)} does not match its recorded sha256")
+    if rows == 0:
+        problems.append("SOURCES.md records no hashes")
+    return problems
+
+
+# Vendored file (under tests/fixtures) -> the file it copies, in the named input.
+UPSTREAM: dict[str, dict[str, str]] = {
+    "bridge": {
+        **{f"lidl/{m}.lidl": f"tests/fixtures/lidl/{m}.lidl" for m in (
+            "test_fullapi_cpp", "test_fullapi_ext_cpp", "storage_module", "mini_module")},
+        **{f"ast/{m}.json": f"tests/fixtures/ast/{m}.json" for m in (
+            "test_fullapi_cpp", "test_fullapi_ext_cpp", "storage_module", "mini_module")},
+        "interface-digest-vectors.json": "tests/fixtures/interface-digest-vectors.json",
+        **{f"docs/multi.{k}.json": f"tests/goldens/multi.{k}.json" for k in ("openrpc", "openapi", "asyncapi")},
+    },
+    "test-modules": {
+        f"conformance/{name}": f"conformance/{name}"
+        for name in ("cases.json", "ext-cases.json", "known.json", "known-ext.json", "README.md")
+    },
+}
+METASCHEMA_ROW = re.compile(r"^\|\s*`([^`]+)`\s*\|\s*`[^`]*`\s*\|\s*`([0-9a-f]{64})`\s*\|")
+
+
+def check_upstream(root: Path, inputs: dict[str, Path]) -> list[str]:
+    fixtures = root / "tests/fixtures"
+    problems = []
+    for name, source in inputs.items():
+        for vendored, upstream in UPSTREAM[name].items():
+            original = source / upstream
+            if not original.is_file():
+                problems.append(f"{vendored}: the {name} input has no {upstream}")
+            elif (fixtures / vendored).read_bytes() != original.read_bytes():
+                problems.append(f"{vendored} differs from the {name} input's {upstream}")
+    if "bridge" in inputs:
+        if (fixtures / "metaschemas").exists():
+            problems.append("tests/fixtures/metaschemas: meta-schemas are read from the bridge input, not vendored")
+        metaschemas = inputs["bridge"] / "tests/metaschemas"
+        rows = 0
+        for line in (metaschemas / "SOURCES.md").read_text(encoding="utf-8").splitlines():
+            match = METASCHEMA_ROW.match(line)
+            if not match:
+                continue
+            rows += 1
+            path = metaschemas / match.group(1)
+            if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != match.group(2):
+                problems.append(f"the bridge's tests/metaschemas/{match.group(1)} does not match its SOURCES.md")
+        if rows < 8:
+            problems.append(f"the bridge's tests/metaschemas/SOURCES.md lists {rows} files, expected 8")
+    return problems
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(prog="regen-fixtures", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--check", action="store_true", help="compare instead of writing")
+    parser.add_argument("--lidl-cli", default=None)
+    parser.add_argument("--root", type=Path, default=Path.cwd())
+    parser.add_argument("--bridge", type=Path, help="the logos-json-rpc-bridge source the fixtures come from")
+    parser.add_argument("--test-modules", type=Path, help="the logos-test-modules source (conformance tables)")
+    args = parser.parse_args()
+    root = args.root.resolve()
+    sys.path.insert(0, str(root / "src"))
+    from logos_bridge.lidl_sources import find_lidl_cli
+
+    cli = find_lidl_cli(args.lidl_cli)
+    version = subprocess.run([cli, "--version"], capture_output=True, check=True).stdout.decode().strip()
+    print(f"regen-fixtures: using {version} ({cli})")
+    derived = derive(cli, root)
+    drift = []
+    for path, data in derived.items():
+        current = path.read_bytes() if path.exists() else None
+        if current == data:
+            continue
+        if args.check:
+            drift.append(f"{path.relative_to(root)} differs from {version}'s output")
+        else:
+            path.write_bytes(data)
+            print(f"wrote {path.relative_to(root)}")
+    for path in stale_outputs(root, derived):
+        if args.check:
+            drift.append(f"{path.relative_to(root)} is no longer produced")
+        else:
+            path.unlink()
+            print(f"removed {path.relative_to(root)}")
+    inputs = {name: path for name, path in (("bridge", args.bridge), ("test-modules", args.test_modules)) if path}
+    problems = drift + check_mirrors(cli, root) + check_recorded_hashes(root) + check_upstream(root, inputs)
+    for problem in problems:
+        print(f"regen-fixtures: {problem}", file=sys.stderr)
+    if problems:
+        return 1
+    compared = sum(len(UPSTREAM[name]) for name in inputs)
+    print(f"regen-fixtures: {len(derived)} derived files {'match' if args.check else 'written'}; mirrors agree; "
+          f"{compared} vendored files equal their inputs ({', '.join(inputs) or 'none given'})")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,8 @@
+module identity_authored_module {
+  version "3.1.4"
+  depends []
+
+  method version() -> tstr description "Authored, with the identity signature."
+  method name() -> tstr
+  method ping() -> bool
+}

@@ -1,0 +1,11 @@
+module noreturn_module {
+  version "1.0.0"
+  depends []
+
+  method notify()
+  method maybe() -> ? tstr
+  method items() -> [? tstr]
+  method fold(value: ? int, extra: ? bstr)
+
+  event ping()
+}

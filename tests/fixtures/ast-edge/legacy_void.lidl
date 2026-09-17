@@ -1,0 +1,6 @@
+; Written before no-return was structural: `-> void` is the migration spelling.
+module legacy_void_module {
+  depends []
+  method reset() -> void description "Forget everything."
+  method count() -> uint
+}

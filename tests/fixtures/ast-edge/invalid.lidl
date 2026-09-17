@@ -1,0 +1,24 @@
+module invalid_module {
+  depends []
+
+  type tstr {
+    a: ? {? tstr: int}
+  }
+
+  type Dup {
+    ? x: ? tstr
+    ? y: any
+  }
+
+  type Dup {
+    z: Missing
+  }
+
+  method f(a: Nope, a: ? ? any) -> [? ? int]
+  method f()
+  method g(m: {int: tstr}) -> {tstr: ? any}
+  method h() -> void
+
+  event e(p: ? Nope)
+  event e()
+}

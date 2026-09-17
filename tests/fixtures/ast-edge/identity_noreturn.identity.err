@@ -1,0 +1,1 @@
+identity_noreturn.lidl: module 'identity_noreturn_module' declares 'name()', but 'name' is reserved for module identity and must be 'name() -> tstr'

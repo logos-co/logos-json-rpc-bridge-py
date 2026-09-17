@@ -1,0 +1,43 @@
+module test_fullapi_ext_cpp {
+  version "1.0.0"
+  description "C++ mirror of test_fullapi_ext_rust, HEADER-FIRST like test_fullapi_cpp: the contract is derived from the impl header, records included. Keeps the two ext providers comparable cell for cell."
+  category "testing"
+  depends []
+
+  type Blob {
+    id: tstr
+    n: uint
+    payload: bstr
+  }
+
+  type Wrapper {
+    inner: Blob
+    tags: [tstr]
+    blobs: [Blob]
+  }
+
+  type Opt {
+    required: tstr
+    maybe: ? tstr
+    count: ? uint
+    blob: ? bstr
+  }
+
+  method whoAmI() -> tstr
+  method echoBlob(v: Blob) -> Blob
+  method echoWrapper(v: Wrapper) -> Wrapper
+  method echoBlobList(v: [Blob]) -> [Blob]
+  method echoBlobMap(v: {tstr: Blob}) -> {tstr: Blob}
+  method echoBytesList(v: [bstr]) -> [bstr]
+  method echoBytesMap(v: {tstr: bstr}) -> {tstr: bstr}
+  method echoIntMap(v: {tstr: int}) -> {tstr: int}
+  method echoStringMap(v: {tstr: tstr}) -> {tstr: tstr}
+  method echoNestedInts(v: [[int]]) -> [[int]]
+  method echoMapOfBytesLists(v: {tstr: [bstr]}) -> {tstr: [bstr]}
+  method echoOpt(v: Opt) -> Opt
+  method echoOptList(v: [Opt]) -> [Opt]
+  method echoOptional(v: ? tstr) -> ? tstr
+  method fireBlobEvent(v: Blob) -> bool
+
+  event blobEvent(v: Blob)
+}

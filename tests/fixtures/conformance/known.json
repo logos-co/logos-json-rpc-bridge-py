@@ -1,0 +1,357 @@
+{
+  "schema": 1,
+  "comment": [
+    "The xfail registry: cells that are KNOWN broken. A registry, not a deletion \u2014",
+    "a cell listed here is reported as `xfail` when it fails and, crucially, as",
+    "`xpass` (which FAILS the run) when it starts passing. That forces the entry",
+    "to be removed when a fix lands, instead of the fix quietly going unnoticed.",
+    "",
+    "Nothing may be silently absent from the matrix. A cell is either covered,",
+    "explicitly skipped with a typed reason, or listed here.",
+    "",
+    "A cell is (case, provider, consumer). `providers` AND `consumers` are both",
+    "REQUIRED on every xfail entry, with no default, because an entry that does",
+    "not say which surface it was measured on manufactures failures on the",
+    "surfaces it was not: the passing surface is then reported as `xpass` and the",
+    "registry becomes the thing generating the noise. That already happened once",
+    "on the provider axis, which is why `per_case_providers` exists;",
+    "`per_case_consumers` is its counterpart.",
+    "",
+    "An entry here names the FIX that retires it, not just the symptom. The four",
+    "failure-class entries below are retired by three DIFFERENT things \u2014",
+    "logos-logoscore-py's lock on logos-logoscore-cli (#99's error channel), an",
+    "upper-bound arity guard in two SDK generators, and the same guard again in the",
+    "separately generated identity dispatch. Saying which is the difference between",
+    "a registry that self-retires and a list of excuses."
+  ],
+  "xfail": [
+    {
+      "id": "M4-residual",
+      "cases": [
+        "adversarial/any/pending-call-canonical"
+      ],
+      "providers": [
+        "test_fullapi_cpp",
+        "test_fullapi_rust"
+      ],
+      "consumers": [
+        "py",
+        "qtproxy-sync",
+        "qtproxy-async"
+      ],
+      "summary": "a CANONICAL-shape forgery of the deferred-call sentinel still hijacks a call",
+      "measured": {
+        "echoAny({\"__logos_pending_call__\": \"lc-0\"})": "TimeoutExpired on both providers \u2014 the call hangs for the full timeout in a nested event loop",
+        "through the Qt consumer": "TimeoutExpired too, on both providers and in BOTH call modes. Added to `consumers` only after measuring: the entry was written when `py` was the only surface, and the driver now refuses an entry that does not say which surfaces it covers."
+      },
+      "note": [
+        "This replaces M4 rather than closing it. The shape check that landed rejects a map with extra keys or a non-string value, which is what M4 actually measured \u2014 but a one-key map whose value is a string IS the sentinel. No detector can separate them, because there is nothing to separate.",
+        "Worse than a hang, and the reason this stays registered rather than being written off: call ids are a per-object counter starting at 0, so a forged \"lc-0\" can collide with a GENUINE in-flight completion and steal its result.",
+        "The in-band design itself is a real constraint, stated at logos_rpc_status.h:24-27 \u2014 the dispatch slot returns a single QVariant, so 'deferred' has nowhere out-of-band to live without an ABI break. Closing this needs that channel, not a better guard."
+      ],
+      "fix_is": "an out-of-band way to signal deferral (a second return channel or a protocol-major dispatch signature), not a stricter predicate"
+    },
+    {
+      "id": "M3",
+      "cases": [
+        "adversarial/{tstr:any}/_bytes-key"
+      ],
+      "providers": [
+        "test_fullapi_cpp",
+        "test_fullapi_rust"
+      ],
+      "consumers": [
+        "qtproxy-sync",
+        "qtproxy-async"
+      ],
+      "summary": "a one-key `_bytes` map reaching a Qt-typed map slot is reinterpreted as bytes and arrives EMPTY",
+      "measured": {
+        "echoMap({\"_bytes\": \"aGk\"}) direct (py)": "{\"_bytes\": \"aGk\"} \u2014 round-trips untouched",
+        "echoMap({\"_bytes\": \"aGk\"}) through the Qt consumer": "{} \u2014 on both providers, in both call modes",
+        "echoAny({\"_bytes\": \"aGk\"}) through the Qt consumer": "{\"_bytes\": \"aGk\"} \u2014 GREEN, and that is not evidence of health; see below",
+        "fireAnyEvent({\"_bytes\": \"aGk\"}) then getLastEvent()": "`anyEvent:b:6869` \u2014 the proxy's type-tagged rendering says QByteArray where the sender put a map. The collision, observed directly on the consumer callback."
+      },
+      "why_the_two_cells_disagree": [
+        "The collision itself is SYMMETRIC: `nlohmannToQVariant` turns the one-key tagged map into a QByteArray, and encoding a QByteArray back out produces the same tagged map. So on an `any` slot the round trip is its own inverse and python sees the value it sent \u2014 the cell is green and proves nothing about the type in between.",
+        "It becomes LOSSY the moment the receiving slot is typed. `echoMap` declares QVariantMap, the incoming value is now a QByteArray, and coercing one to the other yields an empty map. The payload is gone, not merely retyped.",
+        "That is why the previous entry read as unmeasurable: it was looking at the `any` cell. The typed-map cell is the observation, and the event rendering is the direct confirmation."
+      ],
+      "why_it_is_not_being_fixed": [
+        "Inherent, and already documented in-tree at logos_codec.h: a genuine one-key map named `_bytes` whose value is a string is indistinguishable from bytes.",
+        "Closing it means changing the C ABI's data model (JSON-in-strings), a protocol-MAJOR change invalidating every built module binary across ~8 repos. Unlike M6, no cheap change makes the system correct here.",
+        "It is NOT a wire-format question: qt_remote already carries QByteArray natively as a QVariant metatype and the collision still happens \u2014 it is in the type-erased converters, upstream of every wire."
+      ],
+      "fix_is": "a data model where a byte string is not spelled as a map, not a stricter predicate \u2014 the shape that would be checked IS the encoding",
+      "attributed_by_measurement_not_inference": "the same case replayed through test_fullapi_proxy (apiStyle=lp) answers {\"_bytes\": \"aGk\"} \u2014 the map survives an identically-shaped proxy hop on a non-Qt client. So the loss is the Qt conversion, not the extra hop, which is what the old entry predicted and what is now measured.",
+      "registered_here_rather_than_unmeasurable_because": "it now has a red cell with a coordinate. `unmeasurable` was accurate for as long as the only consumer was one that decodes the tag itself; a Qt-typed consumer surface changed that, which is exactly what the entry's own `to_make_it_measurable` line asked for."
+    }
+  ],
+  "skip": [
+    {
+      "cases": [
+        "bstr/*"
+      ],
+      "consumers": [
+        "qml"
+      ],
+      "reason": "unsupported-by-surface",
+      "note": "JavaScript has no byte-string literal; the QML bridge excludes bstr by design"
+    },
+    {
+      "cases": [
+        "uint/boundary/*",
+        "event/uint/boundary"
+      ],
+      "consumers": [
+        "qml"
+      ],
+      "reason": "unsupported-by-surface",
+      "note": [
+        "A JavaScript Number is a double, so a LIDL `uint` above 2^53 can never be",
+        "exact once it reaches QML (logos-view-module-runtime LogosQmlBridge re-emits",
+        "the QVariantList straight into JS). This is a contract limit of that consumer",
+        "surface, not a defect, and no fix on the C++ side changes it.",
+        "Recorded because it was previously nowhere: the only qml skip was for bstr, so",
+        "the numeric limit looked like an untested gap rather than a known boundary.",
+        "The pattern was `uint/boundary` and matched NOTHING: the case was split into",
+        "uint/boundary/above-2^53 and uint/boundary/max and this entry was not updated.",
+        "Nobody noticed because the driver never read skip[] at all \u2014 the first thing",
+        "the second consumer forced was reading it, and the first thing reading it",
+        "found was this. A registry that is not executed decays into a comment."
+      ]
+    }
+  ],
+  "coverage_limits": [
+    {
+      "axis": "consumer",
+      "status": "PARTLY CLOSED \u2014 three consumer points now, was one",
+      "note": [
+        "History, kept because the reasoning is the reusable part: the matrix had ONE",
+        "consumer driver (`py`), so a cell proved a provider agreed with the python",
+        "client, not that two consumer surfaces agreed with each other. That hid a real",
+        "defect \u2014 the event bridge failing to decode tagged bytes into a QByteArray was",
+        "invisible because the undecoded map round-trips and the py client decodes the",
+        "tag itself; it took asserting the bridge directly (logos-protocol",
+        "test_event_payload_fidelity.cpp) to see it.",
+        "It also recorded, correctly, that adding the existing C++/Rust proxies would",
+        "NOT close the hole: both are lp/Rust-client consumers, so they share the py",
+        "blind spot for the Qt-typed path.",
+        "",
+        "Now measured, not argued. The axis runs py + qtproxy-sync + qtproxy-async.",
+        "Two findings came straight out of it: M3 became measurable (and is now an",
+        "ordinary xfail), and Q1 \u2014 the Qt dispatch coercing hostile arguments \u2014 was",
+        "not previously known at all. The live cell counts are in the register rather",
+        "than restated here, because a count written into prose goes stale silently",
+        "and this block is reproduced verbatim in every report.",
+        "",
+        "What is STILL open on this axis:",
+        "  * QML. No driver replays cases.json through the LogosQmlBridge, and the two",
+        "    skip[] entries describe exactly that surface.",
+        "  * The cdylib/Rust proxy. Buildable and driveable by the same --proxy-consumer",
+        "    flag; not wired in.",
+        "  * The lp proxy. Measured here for ATTRIBUTION (it is what proves Q1 and M3",
+        "    are the Qt style rather than the extra hop) but not carried as a standing",
+        "    consumer: it has 2 divergent cases of its own that would need registry",
+        "    entries first.",
+        "  * The ext table (ext-cases.json) still has no proxy at all, so every one of",
+        "    its cells remains single-consumer. It does now run BOTH providers, so it",
+        "    has a provider differential; the consumer axis is the half still missing."
+      ],
+      "how_the_qt_consumer_point_is_selected_now": [
+        "Recorded because the note above describes it by its old shape. The qtproxy point used to be `type: core` with NO `interface` key \u2014 one decision selecting the Qt surface for the module's provider AND consumer sides at once, and the last caller of the generator's removed `--provider-header` mode.",
+        "The two axes are separate keys now: `interface: \"universal\"` makes it a header-first cdylib provider, and `codegen.consumer_api_style: \"qt\"` keeps its dependency wrappers Qt-typed. The consumer point the matrix measures is unchanged in kind; only the way it is declared is. Dropping the second key would silently move this point onto the lp surface test_fullapi_proxy already covers, which is exactly the collapse this axis exists to prevent."
+      ]
+    },
+    {
+      "axis": "transport",
+      "note": [
+        "Every cell is measured over LocalSocket/QtRO: run_matrix.py builds the daemon",
+        "with no `transports=`, and there is no flag to change it. The plain",
+        "(tcp/tcp_ssl) wire is unreachable from this table.",
+        "That mattered for uint: RpcValue's variant had no unsigned alternative",
+        "(logos-protocol cpp/implementations/plain/rpc_value.h), so a uint64 above",
+        "int64max wrapped to -1 there \u2014 a DIFFERENT wrong answer than the one M6",
+        "described, which this matrix would not have matched. Fixed in the same",
+        "logos-protocol PR as M6, but found only by reading the code: no cell here",
+        "could reach it. The regression guard for it lives where it can run \u2014",
+        "logos-logoscore-py's integration table, which now carries 2^63, 2^64-1 and",
+        "2^53+1 and is replayed over local, tcp and tcp_ssl."
+      ]
+    }
+  ],
+  "fixed": [
+    {
+      "ids": [
+        "M1",
+        "M1b",
+        "M5"
+      ],
+      "fixed_by": "logos-protocol 362b03f \u2014 one canonical LIDL <-> JSON codec (#29), pinned here via logos-cpp-sdk 3d322bd / logos-module-builder / logos-logoscore-cli",
+      "what": "a uint64 above int64max degrading to a double once nested (M1/M1b), and a bstr nested in a container being UTF-8 mangled (M5). Both were the same root cause: the Qt and plain-wire paths each had their own conversion, and neither preserved a value whose type the container did not declare.",
+      "verified": "11 cells went xpass on the re-pin and the entries were deleted; the cases stay in cases.json as ordinary green cells, which is the point \u2014 they are now regression guards."
+    },
+    {
+      "ids": [
+        "M6"
+      ],
+      "fixed_by": "logos-protocol \u2014 setEventListenerStdBridge now parses with nlohmann and converts via logos::nlohmannArgsToQVariantList, the same helper callMethodStdBridge uses",
+      "what": "a uint64 above int64max degrading to a double on the EVENT path (uintEvent(2^64-1) -> 1.8446744073709552e+19) while the method path was exact.",
+      "why_it_was_missed_by_the_codec_work": [
+        "M6 was NOT the residue of M1 in the sense the old entry claimed. #29 converged six copies of the VALUE codec; this was a seventh conversion living in an ADAPTER \u2014 the universal->Qt event callback bridge \u2014 which nothing in that PR's scope touched.",
+        "The lossy call was QJsonDocument::fromJson + QJsonValue::toVariant. Qt 6 backs QJsonValue with QCborValue, so integers up to int64 survived it; ONLY a uint64 above int64max had no integral representation and fell back to double. That narrowness is why it read as a deep wire problem rather than a one-line parser choice.",
+        "It is also not the module providers' path: a Qt provider stores its event callback verbatim and a cdylib provider's generated emitTrampoline already used nlohmannArgsToQVariantList. The one live caller is the logoscore daemon's CoreServiceImpl, which forwards every watched module event \u2014 which is exactly why C++ and Rust providers measured identically."
+      ],
+      "verified": "both cells went xpass with the exact value 18446744073709551615; 11 new unit tests in logos-protocol tests/protocol/test_event_payload_fidelity.cpp pin the bridge directly (210/210)."
+    },
+    {
+      "ids": [
+        "bytes-on-the-event-path"
+      ],
+      "fixed_by": "the same change",
+      "what": "canonical tagged bytes {\"_bytes\": ...} were not decoded by the event bridge \u2014 they arrived as a QVariantMap where the method path yields a QByteArray.",
+      "note": [
+        "Never registered as a defect because it was invisible from python: the undecoded map round-trips to JSON and the python client decodes the tag itself, so the matrix saw correct bytes. A C++ or QML event subscriber did not.",
+        "Found by asserting the bridge's behaviour directly instead of only end-to-end \u2014 an end-to-end-only matrix cannot see a defect that a downstream layer happens to undo."
+      ]
+    },
+    {
+      "ids": [
+        "M2"
+      ],
+      "fixed_by": "logos-qt-sdk cdylib glue (kVoidMethods) + logos-rust-sdk void arms",
+      "what": "a `void` return answered `true` from the C++ provider and METHOD_FAILED from the Rust one.",
+      "why_it_looked_like_a_disagreement": [
+        "It was not one. `void` is not a LIDL builtin, so `-> void` parses as Named(\"void\"). The C++ cdylib backend has an arm keyed on that name and returns \"true\"; the Rust backend had none, so void fell to the catch-all that maps every unrecognised Named to serde_json::Value \u2014 and the module returned JSON null.",
+        "null is the failure token further up: logos_json_convert turns it into an invalid QVariant, and core_service reports that as METHOD_FAILED. So the Rust side never rejected anything; the failure was manufactured downstream, in C++.",
+        "The metadata diverged too, unregistered: Rust advertised returnType \"QVariant\" for a void method where C++ advertised \"void\"."
+      ],
+      "how_it_was_closed": "in the shared cdylib glue, which derives the void-method set from the contract both backends compile \u2014 so a third language backend cannot re-open it \u2014 plus void arms in the Rust generator so the C ABI and the interface JSON agree rather than being papered over at the Qt boundary.",
+      "residual": [
+        "`true` is a FABRICATED value: wire-indistinguishable from a real `-> bool` returning true, and LMS-2 \u00a74.8 says the spec answer is null.",
+        "Converging on null instead would have been more correct and was rejected on evidence, not taste: an invalid QVariant is the failure token on that slot, and live callers already depend on `true` (logoscore-cli integration tests, logoscore-py integration tests, and a real QML void call in logos-tutorial).",
+        "So the underlying conflation \u2014 null/invalid-QVariant means failure, leaving no way to say \"succeeded, no value\" \u2014 is UNCHANGED. Both backends now tell the same lie. Fixing it properly needs a success channel that does not overload the value slot."
+      ],
+      "verified": "void/return goes from a pinned per-provider divergence to a single agreeing expectation."
+    },
+    {
+      "ids": [
+        "M4"
+      ],
+      "fixed_by": "logos-protocol \u2014 logos::isPendingCallSentinel, replacing a bare contains() at all four detection sites",
+      "what": "a user map that merely CARRIED the sentinel key was taken for a deferred call.",
+      "measured_before_and_after": {
+        "echoAny({\"__logos_pending_call__\": 1, \"x\": 2}) before": "the call hung for the full timeout, then failed",
+        "after": "echoes back as the ordinary map it is, on both providers"
+      },
+      "note": [
+        "The registry's own `measured` line said RPC_FAILED. That was STALE \u2014 the recorded outcome is TimeoutExpired: the consumer extracts a call id, finds no completion, and waits out a nested event loop. A fast failure and a 20-second hang are different bugs, and the entry described the wrong one.",
+        "`fix_is: same class as M3` was also wrong for the payload actually measured. M3 is inherent \u2014 a one-key `_bytes` map IS the encoding. THIS was a missing shape check, and two sibling detectors in the same repo already had it: isTaggedBytes (logos_codec.h) and isUnauthorizedSentinel (logos_rpc_status.h), the latter landing a month AFTER these checks. The difference was chronology, not principle.",
+        "Behaviour-preserving: the generated glue constructs this map with exactly one entry whose value is a QString call id, so no real sender is affected."
+      ],
+      "residual": "see M4-residual \u2014 the canonical-shape forgery survives, and this entry must not be read as closing it"
+    },
+    {
+      "ids": [
+        "pre-99-null-is-not-an-error"
+      ],
+      "fixed_by": "logos-logoscore-py relocking logos-logoscore-cli onto master (0f0be25), which carries ed19258 (#99) and b3f1a403 (#101).",
+      "what": "Classes A, C and D were one indistinguishable METHOD_FAILED because CoreServiceImpl::callModuleMethod took the invokeRemoteMethod overload with no CallError* and decided the verdict by testing ret.is_null() on the RESULT.",
+      "verified": "#99 reads the error channel and emits {code, message, origin}, and on a null return asks the module for getPluginMethods so an unknown name becomes METHOD_NOT_FOUND with available_methods. #101 widened the rejection fold to the closed set {dispatch_failed, invalid_args, unknown_method}. 18 cells \u2014 three cases x two providers x three consumers.",
+      "watch_for": "failure/A/module-not-loaded is NOT deterministic: the acquire takes ~20s and under load outruns the core_service RPC's own deadline, so the daemon reports the RPC as failed instead of the acquire and the cell answers RPC_FAILED instead of METHOD_FAILED. That could not redden the gate while this entry stood, because both tokens were a failing cell. It CAN now that the cell is expected to pass. Measured across 42 samples: 3 of 7 runs had zero hits, and 1 of 14 py samples hit it."
+    },
+    {
+      "ids": [
+        "B-arity-overflow"
+      ],
+      "fixed_by": "logos-plugin-qt#29 (f668ef2), carried by logos-module-builder 6044ffc. The provider half was logos-cpp-sdk#150 and logos-rust-sdk#50; this is the consumer half.",
+      "what": "An EXTRA argument was dropped and the call succeeded. The last six cells were failure/B/arity/too-many-zero-parameter on `doVoid`, where the provider refused correctly and the Qt host glue discarded the refusal.",
+      "verified": "6 of 6 xpass \u2014 void/method_return on both providers across all three consumers. Nothing else moved: pass 560, xfail 10 (M4-residual 6 + M3 4), no fail.",
+      "note": "TWO SITES, and the second was found only by re-measuring. logos-plugin-qt#28 fixed the multi-concurrency path; the single path returned early via `kVoidMethods.contains(methodName)` before reaching it. With #28 in the builder \u2014 verified root-to-leaf through the lock AND by content \u2014 these six cells were still xfail. The fix was in the build and the cells had not moved, which is what located the second site. Reading the diff would not have.",
+      "cost_of_retiring_early": "18 of these 24 cells flipped one bump earlier, and the obvious move was to retire the whole entry then. Had that happened, the six doVoid cells would have been deleted while still broken, and the glue would have gone on reporting refusals as successful calls with nothing watching."
+    },
+    {
+      "ids": [
+        "B-arity-overflow-lidl-builtin"
+      ],
+      "fixed_by": "logos-plugin-qt#42 (e46678a), carried by logos-module-builder#252 (8007924). The generated C++ and Rust dispatches already refused the call; the glue answered first.",
+      "what": "lidl(\"junk\") answered null with status ok. The Qt host glue answers the lidl() built-in before the module's dispatch runs, and its own argument check returned an empty QVariant.",
+      "verified": "On this relock, with the entry still registered, 6 of 6 cells xpass (both providers, all three consumers), answering {\"__error__\": \"invalid_args\"}, and nothing else moves: pass 566, xfail 10, xpass 6. With the entry retired: pass 572, xfail 10, exit 0."
+    }
+  ],
+  "unmeasurable": [
+    {
+      "id": "M3-history",
+      "supersedes": "the M3 entry that lived here",
+      "summary": "M3 is no longer unmeasurable \u2014 it moved to `xfail` with a coordinate. This is the record of why it sat here, because the reason is a reusable lesson about what a matrix can and cannot see.",
+      "what_this_section_got_right": [
+        "That the earlier xfail was measuring the wrong thing: the python CLIENT decoding the tag, not the system collapsing the map. With `decode_bytes=False` the `any` cells round-trip byte-for-byte, so no change to any C++ repo could ever have made them xpass \u2014 the registry's forcing function was inert.",
+        "That the defect was real anyway, and that closing it needs a data-model change rather than a predicate.",
+        "The prescription: a headless `type: core` module with no `interface` key, driveable by logoscore in-sandbox. That is exactly what test_fullapi_qtproxy is, and it worked."
+      ],
+      "what_it_got_wrong": [
+        "It looked for the collision on the `any` slot, where the transformation is its OWN INVERSE \u2014 map to QByteArray to the same map \u2014 so a round-trip cell there is green no matter what happens in between. The observation was one cell over the whole time: a typed map slot (`echoMap`), where the collision is lossy and the payload arrives as {}.",
+        "So `unmeasurable` was slightly too strong. It was unmeasurable BY THE CELL THE ENTRY WAS WATCHING, on the consumer the matrix had. Two different limits, and conflating them is how a defect stays parked."
+      ],
+      "generalisation": "when a suspected transformation is invertible, an echo cell cannot see it. Measure it where a type is asserted (a typed slot, or a type-tagged rendering like the proxy's getLastEvent) \u2014 not where the value merely comes back."
+    }
+  ],
+  "retired": [
+    {
+      "id": "qtproxy-wrapper-axis",
+      "retired": [
+        "test_fullapi_qtproxy.useWrapper",
+        "test_fullapi_qtproxy.currentWrapper"
+      ],
+      "surface_change": "test_fullapi_qtproxy's method surface goes 47 -> 45. Measured: `lm methods --json` on the plugin built before and after the migration differs by exactly these two entries and nothing else \u2014 same names, same Qt-typed signatures, same order, same descriptions for the other 45.",
+      "what_it_measured": [
+        "An AXIS, not a cell: `useWrapper(\"generated\"|\"veneer\")` switched every forwarded call and every event subscription between the Qt wrapper the build generated and a second, hand-committed copy of the same public surface (src/full_api_veneer_api.{h,cpp}, verbatim `logos-qt-generator --backend consumer` output). The claim under test was that the two implementations of one Qt surface agree."
+      ],
+      "why_it_is_gone": [
+        "The two implementations converged. logos-plugin-qt's buildPlugin.nix now emits EVERY qt-style dependency and interface wrapper with `logos-qt-generator --backend consumer` \u2014 the veneer backend \u2014 so the generated `FullApi` IS the veneer. Selecting \"generated\" or \"veneer\" ran the same code twice and reported agreement with itself.",
+        "It had also become actively wrong. The migrated module's umbrella is origin-bound (`--binding origin`), so its wrapper takes (origin, target); the re-emission that produced the second copy passed no `--binding` and would have overwritten it with the LogosAPI-taking constructor the umbrella cannot call. Keeping the axis meant keeping a build that could not link."
+      ],
+      "not_measured_by_this_registry": "No cell moves. The driver never called it: run_matrix.py's proxy consumer sets only useProvider / useCallMode and reads both back, so the wrapper axis was exercised by hand, never by the matrix, and no xfail or skip entry references it.",
+      "what_survives": [
+        "`useCallMode` \u2014 the sync/async axis, untouched, and the one that does replay the whole case table twice.",
+        "`resultShapeProbe` \u2014 kept, with its subject moved. It used to render makeResult(true) through the generated wrapper and the veneer. It now renders what the Qt consumer wrapper decoded and what survives conversion to this module's own std-typed provider surface, which is where the same loss now lives: LogosResult::error is a QVariant (absent and empty are distinct), StdLogosResult::error is a std::string (they are not)."
+      ],
+      "if_a_second_qt_implementation_returns": "re-add the axis rather than reviving these two methods from history: the shape that made it honest was one `src` built twice with different codegen, and that lives in flake.nix, not in the fixture."
+    },
+    {
+      "id": "Q1b",
+      "retired_because": "the divergence it registered no longer exists. It recorded that the Qt proxy refused a non-array/non-object in a [any]/{tstr:any} slot while the C++ cdylib provider echoed the scalar back \u2014 cases.json pinned that split with expect_by_provider. logos-cpp-sdk 853a261 made the cdylib container decode shape-check (jsonArgToStd used to hand a LogosList/LogosMap parameter the raw JSON), so both providers now answer dispatch_failed and the two expectations collapse to one.",
+      "cases": [
+        "hostile/[any]/scalar",
+        "hostile/{tstr:any}/scalar"
+      ],
+      "providers": [
+        "test_fullapi_cpp"
+      ],
+      "consumers": [
+        "qtproxy-sync",
+        "qtproxy-async"
+      ],
+      "measured": "four cells xfail -> pass, and the four py-vs-qtproxy consumer-differential rows for the same two cases went from disagreeing to agreeing. Attributed across three arms: unpatched build + old registry 498/14/12/4, patched + old 500/14/12/2, patched + new 506/10/12/0.",
+      "note": "This is the change Q1b's own `fix_is` named and then declined \u2014 'make the C++ cdylib provider's container decode refuse a non-array/non-object, collapsing the expect_by_provider. Still valid on its own merits, but it is no longer motivated by this cell.' It was motivated by a different cell in the end: the same leniency was corrupting values through the Qt consumer, turning \"notalist\" into an 8-element list."
+    },
+    {
+      "id": "Q1",
+      "retired_because": "all 12 registered cells PASS, so the entry reported xpass rather than xfail and kept the run red. Measured across three arms: unpatched build + pre-edit registry, patched build + pre-edit registry, and patched + edited \u2014 the same 12 xpass in every one, so this is neither the container shape-check (logos-cpp-sdk 853a261) nor the cases.json collapse. It went stale earlier, when test_fullapi_qtproxy became `interface: \"universal\"`: the entry described a Qt-typed PROVIDER dispatch reading a declared type from C++, where `[uint]` and `[any]` are both QVariantList so only array-ness is checkable. That dispatch no longer exists in the fixture \u2014 inbound arguments now go through the C++ cdylib decode (logos::fromJson<T>), which HAS the element type and refuses a bad element.",
+      "cases": [
+        "hostile/[uint]/negative-element",
+        "hostile/[uint]/fractional-element",
+        "hostile/[int]/fractional-element"
+      ],
+      "providers": [
+        "test_fullapi_cpp",
+        "test_fullapi_rust"
+      ],
+      "consumers": [
+        "qtproxy-sync",
+        "qtproxy-async"
+      ],
+      "measured": "each of the 12 expects dispatch_failed and gets dispatch_failed, in both call modes.",
+      "note": "Q1's own `provider_dispatch_changed_by_the_qtproxy_migration` predicted the opposite \u2014 'expected to leave the three registered cells where they are'. The prediction was wrong and is preserved here rather than quietly dropped, because the reasoning it gives (the fixture cannot carry a rejection back through a bare list return) is still true; what it missed is that the rejection now happens at the inbound decode, before the return type matters at all."
+    }
+  ]
+}
