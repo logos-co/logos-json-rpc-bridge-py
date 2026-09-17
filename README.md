@@ -157,11 +157,13 @@ becomes `stale`, discovery runs again (the status and digests may change), and e
 subscription to the module ends with `SubscriptionTerminated` (`reason:
 "provider_changed"`). A typed consumer should run `check_compat()` again before it
 subscribes again. A provider that the protocol loses ends subscriptions with
-`provider_unavailable` instead. A quick reload of the same build could go unnoticed on a
-bridge whose logos-protocol predates `dcf4f05`: events kept flowing and
-`Event.generation` did not change. logos-protocol#91, which `dcf4f05` carries and the
-locked bridge `efd4721` therefore has, reports such a swap on the qt_remote transport —
-the subscription ends and the next one starts at a higher generation.
+`provider_unavailable` instead, and a reload takes that path rather than revalidation's.
+logos-protocol#91, which `dcf4f05` carries, reports the swap on the qt_remote transport:
+with `dcf4f05` on both the daemon and the plugins, a reload onto the *same* build ends the
+subscription with `provider_unavailable` within ~0.1 s of the daemon's `reload` returning,
+and the next subscription starts one `Event.generation` higher. It arrives with
+`discovery.revalidate_ms` set to 10 minutes, so it is the transport reporting the swap and
+not the bridge rediscovering the module. Measured on aarch64-darwin and x86_64-linux.
 
 ## Typed clients
 
@@ -604,8 +606,10 @@ starts and stops the node in a worker thread) do the same:
 - Discovery is the module's unvalidated self-report (`authoritative: false`) unless the
   bridge serves a validated `lidl()` contract (`interface_status: ok`). Even then,
   `authoritative` stays `false`: the contract is what the module claims about itself.
-- A changed module is noticed only at the next revalidation (`discovery.revalidate_ms`),
-  and a quick reload of the same build may not be noticed at all.
+- A changed module is noticed only at the next revalidation (`discovery.revalidate_ms`).
+  A reload is not: from logos-protocol `dcf4f05` (#91) on, the transport reports the swap
+  and the subscription ends with `provider_unavailable`, even onto the same build (see
+  [Contracts and discovery](#contracts-and-discovery)).
 - A provider reloaded while the bridge relayed its stream (a chunked download, say) can
   stay unreachable through the bridge's upstream client. Bridges from
   logos-json-rpc-bridge `c8135ec` (#6) on replace that client, measured at about 5.5 s,
@@ -688,7 +692,8 @@ document tests use. It covers:
   connection slots;
 - the lifecycle canary: unload the provider, `SubscriptionTerminated`
   (`provider_unavailable`), `ModuleUnavailable`, load it again, the same view, and a
-  fresh subscription;
+  fresh subscription; and a reload onto the same build, reported the same way with
+  revalidation turned off;
 - the generated clients (`tests/goldens/`) on every non-transport case, refusal parity,
   `check_compat()` (`exact`), and agreement with the dynamic proxy;
 - contract identities: the served digests, `lidl json --identity` of the provider's
