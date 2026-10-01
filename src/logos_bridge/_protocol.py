@@ -155,6 +155,8 @@ CALL_ERROR_CODES: Final[Mapping[str, int]] = {
     "call_failed": -32000,
     "invalid_args": -32602,
     "invalid_arg": -32602,
+    "dispatch_failed": -32602,
+    "unknown_method": -32601,
 }
 
 
@@ -170,6 +172,18 @@ def map_call_error(upstream_code: str) -> ErrorSpec:
 def not_found() -> dict[str, Any]:
     """The one refusal for unknown, unexposed and denied targets alike."""
     return ERROR_TABLE[-32601].to_error()
+
+
+def is_unknown_method_refusal(value: Any) -> bool:
+    """A call result that is exactly a provider's ``unknown_method`` refusal, which the
+    bridge answers with :func:`not_found` (error_map.h ``isUnknownMethodRefusal``)."""
+    return (
+        isinstance(value, dict)
+        and len(value) == 3
+        and value.get("code") == "unknown_method"
+        and isinstance(value.get("message"), str)
+        and isinstance(value.get("origin"), str)
+    )
 
 
 def invalid_params_error(reason: str, path: str = "") -> dict[str, Any]:

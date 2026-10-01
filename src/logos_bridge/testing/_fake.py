@@ -91,7 +91,10 @@ class FakeError:
 
 @dataclass(frozen=True)
 class Reject:
-    """Answer with a provider refusal *result* (``{"code", "message", "origin"}``)."""
+    """Answer with a provider refusal *result* (``{"code", "message", "origin"}``).
+
+    As from the bridge, a call refused ``unknown_method`` gets -32601 instead.
+    """
 
     code: str
     message: str
@@ -1313,7 +1316,11 @@ class FakeBridge:
             handler = FakeError(-32603)
 
         def respond(value: Any) -> None:
-            batch.fill(slot, proto.make_result(req_id, value))
+            # dispatchCall: the provider has no such method, so the same -32601 as any other.
+            if proto.is_unknown_method_refusal(value):
+                batch.fill(slot, _error(req_id, proto.not_found()))
+            else:
+                batch.fill(slot, proto.make_result(req_id, value))
 
         def fail(error: dict[str, Any]) -> None:
             batch.fill(slot, _error(req_id, error))

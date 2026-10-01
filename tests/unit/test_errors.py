@@ -128,6 +128,20 @@ def test_call_error_mapping() -> None:
     assert proto.map_call_error("invalid_arg").code == -32602
     assert proto.map_call_error("something_new").code == -32603
     assert proto.not_found() == proto.ERROR_TABLE[-32601].to_error()
+    # A provider's own refusals, should one arrive as a CallError.
+    assert proto.map_call_error("dispatch_failed").to_error() == proto.map_call_error("invalid_args").to_error()
+    assert proto.map_call_error("unknown_method").to_error() == proto.not_found()
+
+
+def test_only_an_exact_unknown_method_refusal_is_not_found() -> None:
+    refusal = {"code": "unknown_method", "message": "unknown method 'add'", "origin": "calc_module"}
+    assert proto.is_unknown_method_refusal(refusal)
+    for code in ("dispatch_failed", "invalid_args", "something_new", ""):
+        assert not proto.is_unknown_method_refusal({**refusal, "code": code})
+    renamed = {"code": "unknown_method", "message": "m", "module": "calc_module"}
+    for value in ({**refusal, "detail": "x"}, renamed, {**refusal, "origin": None}, None, True,
+                  "unknown_method", {}, ["unknown_method", "m", "calc_module"]):
+        assert not proto.is_unknown_method_refusal(value)
 
 
 def test_timeouts_are_told_apart() -> None:

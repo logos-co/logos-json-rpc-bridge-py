@@ -21,6 +21,7 @@ BYTES_KEY: Final = "_bytes"
 _B64URL: Final = re.compile(r"[A-Za-z0-9_-]*")
 
 # The closed set of provider refusal codes (logos-rust-sdk src/args.rs REJECTION_CODES).
+# A bridge since logos-json-rpc-bridge#11 answers unknown_method with -32601; older ones pass it on.
 REJECTION_CODES: Final[tuple[str, ...]] = ("dispatch_failed", "invalid_args", "unknown_method")
 
 _RESULT_KEYS: Final = frozenset({"success", "value", "error"})

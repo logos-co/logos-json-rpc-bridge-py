@@ -103,6 +103,8 @@ async def test_rejections_fold_and_bad_results_are_decode_errors(clients: dict[s
                      {"code": "invalid_args", "message": "expected 1 arguments, got 0", "origin": "p"})
         fake.on_call("test_fullapi_ext_cpp", "echoOpt", Wire({"maybe": 1}))
         fake.on_call("test_fullapi_ext_cpp", "echoOptional", Wire(None))
+        fake.on_call("test_fullapi_ext_cpp", "echoIntMap",  # a stale contract: the provider lost the method
+                     Reject("unknown_method", "unknown method 'echoIntMap'", "test_fullapi_ext_cpp"))
         async with AsyncBridgeClient(fake.url) as bridge:
             client = ext.AsyncTestFullapiExtCppClient(bridge)
             with pytest.raises(ProviderRejection) as rejected:
@@ -110,6 +112,9 @@ async def test_rejections_fold_and_bad_results_are_decode_errors(clients: dict[s
             assert rejected.value.code == "dispatch_failed" and rejected.value.method == "echoBlob"
             with pytest.raises(ProviderRejection, match="expected 1 arguments"):
                 await client.echo_string_map({"k": "v"})  # rejection-ambiguous, still folded
+            with pytest.raises(MethodNotFound) as gone:
+                await client.echo_int_map({"k": 1})
+            assert type(gone.value) is MethodNotFound  # the bridge's -32601, not a local MethodNotExposed
             with pytest.raises(ResultDecodeError, match="expected string at result.required, got null"):
                 await client.echo_opt(ext.Opt(required="r"))
             assert await client.echo_optional(None) is None
