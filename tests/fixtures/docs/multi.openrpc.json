@@ -138,7 +138,7 @@
         "description": "The provider refused the call and said why. It arrives as the call's result, not as a JSON-RPC error.",
         "properties": {
           "code": {
-            "description": "Known codes: dispatch_failed (the argument values were refused), invalid_args (wrong argument count), unknown_method (reserved; not emitted yet). Treat any other code as a refusal too.",
+            "description": "Known codes: dispatch_failed (the argument values were refused) and invalid_args (wrong argument count). Treat any other code as a refusal too. unknown_method (no method by that name) never arrives here: the bridge answers it with the -32601 MethodNotFound error.",
             "type": "string"
           },
           "message": {

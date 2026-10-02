@@ -35,7 +35,6 @@ from logos_bridge.typed import (
     InterfacePlans,
     LogosResult,
     MethodPlan,
-    ResultDecodeError,
 )
 
 TABLES = {
@@ -79,13 +78,8 @@ PINNED: dict[tuple[str, str], str] = {
 STRICTER: dict[tuple[str, str], str] = {
     # A typed bstr takes bytes; a pre-encoded (and padded) tag is a caller's JSON, not bytes.
     ("ext-cases", "bstr/padded-base64"): "expected bytes at arg0.payload, got object",
-    # A plain string is not bytes: the C++ provider converts it, the Rust one echoes the string.
+    # A plain string is not bytes: both providers convert it.
     ("ext-cases", "[bstr]/lenient-plain-string"): "expected bytes at arg0[0], got string",
-}
-
-# The Rust provider's echo breaks the contract; this client refuses to decode it.
-STRICTER_RESULTS: dict[tuple[str, str, str], str] = {
-    ("ext-cases", "[bstr]/lenient-plain-string", "test_fullapi_ext_rust"): "expected bytes at result[0], got string",
 }
 
 # The canonical encoder spells an empty record field by omission, so the wire differs.
@@ -188,9 +182,6 @@ def test_value_cases_round_trip(item: tuple[str, ConformanceCase]) -> None:
     assert encoded == CANONICALIZED.get((table, case.id), case.wire_args())
     assert provider_decode(plan, case.wire_args()) is None
     for provider, expected in case.expectations().items():
-        key = (table, case.id, provider or "")
-        if key in STRICTER_RESULTS:
-            continue
         decoded = plan.decode_result(wire(expected), module="m")
         assert decoded == typed_expectation(plan, expected, PLANS[table].interface), provider
 
@@ -219,16 +210,6 @@ def test_the_strictness_registry(key: tuple[str, str]) -> None:
         plan.encode_args(case.call_args())
     assert excinfo.value.message == STRICTER[key]
     assert provider_decode(plan, case.wire_args()) is None, "a provider accepts this wire"
-
-
-def test_stricter_results() -> None:
-    for (table, cid, provider), message in STRICTER_RESULTS.items():
-        case = TABLES[table][1].case(cid)
-        plan = PLANS[table].method(case.method)
-        with pytest.raises(ResultDecodeError) as excinfo:
-            plan.decode_result(wire(case.expectations()[provider]), module="m")
-        assert excinfo.value.reason == message
-        assert f"m.{plan.name} returned a value that does not match its contract" in str(excinfo.value)
 
 
 def test_undeclared_methods_are_refused_before_sending() -> None:

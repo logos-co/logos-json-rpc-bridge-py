@@ -285,4 +285,4 @@ async def test_the_stricter_cases_are_accepted_by_the_fake_provider() -> None:
             assert echoed == wire(padded.expectations()[None])
             plain = TABLES["ext-cases"][1].case("[bstr]/lenient-plain-string")
             echoed = await client.call_encoded("test_fullapi_ext_cpp", plain.method, plain.wire_args())
-            assert echoed == plain.expectations()["test_fullapi_ext_cpp"]  # the C++ provider's answer
+            assert echoed == wire(plain.expectations()[None])
