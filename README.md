@@ -627,9 +627,10 @@ starts and stops the node in a worker thread) do the same:
     logos-protocol, not in the bridge: `RemoteTransportConnection::requestObject()`
     freed a replica facade that had never reached `Valid`, while Qt Remote Objects
     still held it as a raw pointer. logos-protocol#95 parks such a facade instead of
-    freeing it, and a Qt patch for the same hazard is queued separately; neither is in
-    the bridge this package locks (`efd4721`, whose logos-protocol `dcf4f05` predates
-    #95), so the ordering rule stands there too.
+    freeing it, and a Qt patch for the same hazard is queued separately. The bridge this
+    package locks (`e939905`) is built with #95 (logos-protocol `8bbc027`), but the
+    daemon its integration tests run under (logos-test-modules `d093473`) is still on
+    `dcf4f05`, which predates it, so the ordering rule stands there too.
 - A call to an exposed module whose provider is not loaded is answered `ModuleUnavailable`
   (-32001) when `limits.call_timeout_ms` runs out (measured: 29.7 s at the default 30 s)
   **or later**, although its subscriptions end at once.
