@@ -1077,7 +1077,7 @@ async def test_handler_outcomes(caplog: pytest.LogCaptureFixture) -> None:
 
     async with FakeBridge() as fake:
         methods = ["chain", "async_error", "explode", "unencodable", "no_data", "custom", "unknown_code",
-                   "blob", "reject", "silent", "unscripted", "context"]
+                   "blob", "reject", "reject_args", "lookalike", "silent", "unscripted", "context"]
         fake.module("h", methods)
         fake.on_call("h", "chain", Delay(0.01, Delay(0.01, lambda ctx: f"chained {ctx.params}")))
         fake.on_call("h", "async_error", async_error)
@@ -1088,6 +1088,8 @@ async def test_handler_outcomes(caplog: pytest.LogCaptureFixture) -> None:
         fake.on_call("h", "unknown_code", FakeError(-32099))
         fake.on_call("h", "blob", b"\x00\xff")
         fake.on_call("h", "reject", Reject("unknown_method", "no such method", "h"))
+        fake.on_call("h", "reject_args", Reject("invalid_args", "expected 1 arguments, got 0", "h"))
+        fake.on_call("h", "lookalike", {"code": "unknown_method", "message": "no such method", "origin": "h"})
         fake.on_call("h", "silent", NoResponse)
         fake.on_call("h", "context", lambda ctx: [ctx.module, ctx.method, ctx.transport, ctx.request_id,
                                                   ctx.raw_params, ctx.connection is not None])
@@ -1110,8 +1112,11 @@ async def test_handler_outcomes(caplog: pytest.LogCaptureFixture) -> None:
             assert (await call("custom"))["error"] == proto.ERROR_TABLE[-32001].to_error("custom text")
             assert (await call("unknown_code"))["error"] == {"code": -32099, "message": "error"}
             assert (await call("blob"))["result"] == {"_bytes": "AP8"}
-            assert (await call("reject"))["result"] == {"code": "unknown_method", "message": "no such method",
-                                                        "origin": "h"}
+            # As from the bridge: unknown_method is the one -32601, any other refusal stays a result.
+            assert (await call("reject"))["error"] == proto.not_found()
+            assert (await call("lookalike"))["error"] == proto.not_found()
+            assert (await call("reject_args"))["result"] == {"code": "invalid_args",
+                                                             "message": "expected 1 arguments, got 0", "origin": "h"}
             assert (await call("context", 5))["result"] == ["h", "context", "ws", "context", [5], True]
             await ws.send(json.dumps({"jsonrpc": "2.0", "id": "s", "method": "rpc.call",
                                       "params": {"module": "h", "method": "silent"}}))

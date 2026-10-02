@@ -272,9 +272,10 @@ Arguments are checked and encoded before anything is sent. A problem raises
 `ArgumentError` (or `ArityError`) with the argument's path, and no request is sent. An
 omitted trailing optional argument is sent as `null`, and an unset optional record field
 is left out. Generated clients call `rpc.call` only, never the bridge's
-`<module>.<method>` aliases. A provider refusal always raises `ProviderRejection`. When
-a legitimate result could look like a refusal (`any`, or a map whose values can be
-strings), the generator prints a note. A result that does not match raises `ResultDecodeError`. An event that does
+`<module>.<method>` aliases. A provider's refusal of the arguments always raises
+`ProviderRejection`. When a legitimate result could look like a refusal (`any`, or a map
+whose values can be strings), the generator prints a note. A result that does not match
+raises `ResultDecodeError`. An event that does
 not match raises `EventDecodeError` from `get()` and iteration, while
 `subscription.results()` yields the error and continues. `SubscriptionTerminated` ends a
 typed stream, whatever the reason.
@@ -342,7 +343,10 @@ unlikely to declare: `module_name`, `module_info`, `interface_status`, `is_typed
 - A provider that refuses a call answers `{"code", "message", "origin"}` as its result.
   `call()` raises `ProviderRejection` for the codes `dispatch_failed`, `invalid_args` and
   `unknown_method`, exactly as the Rust SDK's `as_dispatch_rejection` does. Pass
-  `detect_rejection=False` to get the object instead.
+  `detect_rejection=False` to get the object instead. From logos-json-rpc-bridge#11 on,
+  the bridge never passes `unknown_method` on: it answers the call with the same -32601 as
+  any unknown method, so `call()` raises `MethodNotFound`, whatever `detect_rejection`
+  says. Only an older bridge delivers it as a result.
 
 ## Errors
 
@@ -350,7 +354,7 @@ Every exception derives from `BridgeError`.
 
 | Error | When |
 |---|---|
-| `MethodNotFound` (-32601) | unknown, unexposed or denied module/method; deliberately indistinguishable |
+| `MethodNotFound` (-32601) | unknown, unexposed or denied module/method, including a provider's `unknown_method` refusal; deliberately indistinguishable |
 | `InvalidParams` (-32602) | bad params; `.detail` holds `reason` and `path` |
 | `ParseError`, `InvalidRequest` | the bridge could not read a request |
 | `UpstreamCallFailed` (-32603), `CallNotDispatched` (-32000) | the call could not run |
@@ -468,7 +472,9 @@ async def test_greeting():
 
 Handlers return a value, `FakeError(code)`, `Reject(code, message, origin)`,
 `NoResponse`, `Delay(seconds, then)`, or a (sync or async) callable taking a context whose
-`emit()` sends events. The fake reproduces the bridge's result shapes and messages,
+`emit()` sends events. As the bridge does, the fake answers a call whose result is exactly
+an `unknown_method` refusal (such as `Reject("unknown_method", ...)`) with -32601; other
+refusals stay results. The fake reproduces the bridge's result shapes and messages,
 null-id errors, the batch cap, duplicate-id and unknown-unsubscribe acks, close codes
 1003/1008/1009 (1006 on `stop()`), dropped upgrades, `rpc.schema` views with or without
 `lidl()` discovery (`status=`), and optional quirks of older bridges

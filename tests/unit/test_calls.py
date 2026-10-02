@@ -165,13 +165,18 @@ async def test_bridge_errors_raise_their_classes() -> None:
 async def test_unknown_targets_are_indistinguishable() -> None:
     async with FakeBridge() as fake:
         standard_module(fake)
+        # The provider itself has no such method: the bridge answers -32601, not a ProviderRejection.
+        fake.on_call("m", "echo", Reject("unknown_method", "unknown method 'echo'", "m"))
         async with AsyncBridgeClient(fake.url) as client:
             with pytest.raises(MethodNotFound) as unknown_module:
                 await client.call("nope", "echo")
             with pytest.raises(MethodNotFound) as unknown_method:
                 await client.call("m", "nope")
-            assert unknown_module.value.message == unknown_method.value.message == "method not found"
-            assert unknown_module.value.data == unknown_method.value.data
+            with pytest.raises(MethodNotFound) as refused:
+                await client.call("m", "echo", detect_rejection=False)
+            assert (unknown_module.value.message == unknown_method.value.message == refused.value.message
+                    == "method not found")
+            assert unknown_module.value.data == unknown_method.value.data == refused.value.data
 
 
 @async_test
