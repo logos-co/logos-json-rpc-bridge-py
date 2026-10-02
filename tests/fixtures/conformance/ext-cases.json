@@ -605,22 +605,16 @@
           "hi"
         ]
       ],
-      "expect_by_provider": {
-        "test_fullapi_ext_rust": [
-          "hi"
-        ],
-        "test_fullapi_ext_cpp": [
-          {
-            "_bytes": "aGk"
-          }
-        ]
-      },
+      "expect": [
+        {
+          "_bytes": "aGk"
+        }
+      ],
       "tags": [
         "boundary",
-        "bytes-at-depth",
-        "divergence"
+        "bytes-at-depth"
       ],
-      "why": "a plain string where the contract says [bstr]. Both providers now ACCEPT it \u2014 the divergence that mattered is closed. Before the codec unification the C++ side refused, because a [bstr] ELEMENT went through the strict codec the cdylib backend emitted while a SCALAR bstr went through a lenient one: echoBytes(\"hi\") succeeded and echoBytesList([\"hi\"]) threw, inside one module, for the same type. One function now.\nStill pinned per provider because the ECHOED FORM differs, and that is not the same defect: C++ decodes to real bytes and re-emits the canonical tag, while Rust binds [bstr] as an untyped Value and echoes the input verbatim. A representation difference from an untyped binding, not a disagreement about what the value is."
+      "why": "a plain string where the contract says [bstr]. Both providers now ACCEPT it \u2014 the divergence that mattered is closed. Before the codec unification the C++ side refused, because a [bstr] ELEMENT went through the strict codec the cdylib backend emitted while a SCALAR bstr went through a lenient one: echoBytes(\"hi\") succeeded and echoBytesList([\"hi\"]) threw, inside one module, for the same type. One function now.\nNo longer pinned per provider: the Rust side bound [bstr] as an untyped Value and echoed the input verbatim, and since logos-rust-sdk's typed collections (#64) it decodes to real bytes and re-emits the canonical tag, as C++ does."
     },
     {
       "id": "Optional/record/all-present",

@@ -19,60 +19,7 @@
     "",
     "CONSUMERS. Every entry names the surfaces it was measured on, and this table now has three: py, extqtproxy-sync and extqtproxy-async (test_fullapi_ext_qtproxy, the Qt-typed consumer of full_api_ext). An entry that lists only `py` is a claim that the cell was not observed on the other two \u2014 not a default."
   ],
-  "xfail": [
-    {
-      "id": "ext-nested-int-range-unchecked-on-one-provider",
-      "cases": [
-        "[[int]]/out-of-signed-range"
-      ],
-      "providers": [
-        "test_fullapi_ext_rust"
-      ],
-      "consumers": [
-        "py"
-      ],
-      "summary": "2^64-1 in an `int` slot two containers deep is accepted and echoed by test_fullapi_ext_rust; test_fullapi_ext_cpp rejects it by coordinate, and so does the Qt proxy",
-      "correct_behaviour": "`int` is i64. The element loop that decodes `[[int]]` owes a range check at every element, at every depth \u2014 the same check the top-level `int` slots already get. Out of range is a rejection, not a value.",
-      "measured": {
-        "test_fullapi_ext_cpp / py": "REJECTS: {\"code\": \"dispatch_failed\", \"message\": \"expected signed integer in range at arg0[0][0], got number\", \"origin\": \"test_fullapi_ext_cpp\"} \u2014 the coordinate is named, which is why this entry's expectation is a measurement of one provider rather than a reading of the contract.",
-        "test_fullapi_ext_rust / py": "ACCEPTS and echoes [[18446744073709551615]] unchanged. Not a rounding, not a wrap to -1: the exact value comes back, so the decode never went through an i64 at all.",
-        "both providers, through the Qt proxy (sync and async)": "REJECTED, with the same sentence and the same coordinate, `origin: test_fullapi_ext_qtproxy`. The proxy's own cdylib dispatch decodes the argument into std::vector<std::vector<int64_t>> before it ever calls out, so the Rust provider is never offered the out-of-range number. The defect is therefore INVISIBLE on two of this table's three consumers \u2014 which is what makes it worth a case: the consumer differential prints it as py disagreeing with both proxy points, on the provider that has the hole.",
-        "the neighbouring positive control": "echoNestedInts([[-9007199254740993, 9007199254740993]]) \u2014 both edges outside double precision, at depth 2 \u2014 round-trips identically on all six provider x consumer surfaces. The hole is the RANGE check, not the depth."
-      },
-      "fix_is": "a range check in test_fullapi_ext_rust's `[[int]]` element decode, i.e. in the Rust backend's generated container loop rather than in the fixture \u2014 the fixture declares `[[int]]` and nothing else. It retires when this cell rejects on the Rust provider with the class the C++ one already reports.",
-      "note": [
-        "Found by probing the nested widened containers directly rather than by the table, and then given a case so it has a forcing function. The case is stated as a plain `expect`, NOT as expect_by_provider: the two providers implement one contract and one of them is wrong, so declaring the divergence would freeze the hole into the contract.",
-        "Registered against the RUST provider and the `py` consumer ONLY. The proxy consumers pass, and they must keep passing \u2014 if the day comes that a proxy cell here goes red, the proxy's own decode has lost the check too, and that is a second defect, not this one."
-      ]
-    },
-    {
-      "id": "ext-bstr-leniency-canonicalised-by-the-proxy",
-      "cases": [
-        "[bstr]/lenient-plain-string"
-      ],
-      "providers": [
-        "test_fullapi_ext_rust"
-      ],
-      "consumers": [
-        "extqtproxy-sync",
-        "extqtproxy-async"
-      ],
-      "summary": "the one DECLARED provider divergence in this table stops diverging through a proxy \u2014 the hop canonicalises the plain string to tagged bytes before the provider ever sees it",
-      "correct_behaviour": "the case says: a plain JSON string in a `[bstr]` slot is accepted leniently by test_fullapi_ext_rust and echoed back as a string, while test_fullapi_ext_cpp canonicalises it to tagged bytes. That is a statement about the two PROVIDERS' decoders, and it can only be measured by a caller that reaches a provider directly.",
-      "measured": {
-        "py": "providers DIFFER: ext_rust -> [\"hi\"], ext_cpp -> [{\"_bytes\": \"aGk\"}]. The declared divergence, unchanged.",
-        "extqtproxy-sync / extqtproxy-async": "providers AGREE: both answer [{\"_bytes\": \"aGk\"}]. The proxy's own cdylib dispatch decodes the `[bstr]` argument into std::vector<std::vector<uint8_t>> \u2014 leniently, the C++ way \u2014 and re-encodes it as tagged bytes on the outbound call, so the Rust provider is never offered a plain string and its leniency is never exercised. The ext_cpp cell still passes because its expectation is already the canonical form; the ext_rust cell fails.",
-        "the same divergence is DEEPER and WIDER than the one case says, measured by hand and NOT given cases here": "the registered case puts a plain string at depth 1 of [bstr]. Three more shapes do the same thing and none is in the table: `echoMapOfBytesLists({\"k\": [\"hi\"]})` \u2014 a plain string TWO containers deep \u2014 answers 0x6869 on ext_cpp and \"hi\" on ext_rust; `echoMapOfBytesLists({\"k\": [42]})` answers the two ASCII bytes 0x3432 on ext_cpp and the number 42 on ext_rust; `echoBytesList([[1, 2]])` answers 0x0102 on ext_cpp and [1, 2] on ext_rust. Through either proxy consumer all three answer the ext_cpp form, the same masking this entry describes. They are recorded and deliberately NOT turned into cases: the second one is not leniency but a COERCION \u2014 the number 42 became the bytes of its decimal spelling \u2014 and whether a bstr slot should coerce, reject, or keep being lenient is a decision about the contract that the ext table's owner has not made. Writing an expectation would make that decision by accident, and writing it as expect_by_provider would freeze the disagreement. What is not in doubt: the positive control passes everywhere \u2014 {\"k\": [0x0080ff, empty]} round-trips byte-identically on all six provider x consumer surfaces.",
-        "the report says so on its own": "the DECLARED DIVERGENCES block prints `[bstr]/lenient-plain-string VARIES BY CONSUMER \u2014 py: providers DIFFER; extqtproxy-sync/async: providers agree \u2014 no longer diverges`. That line existed before this entry and had nothing to compare against; it is the thing worth reading here."
-      },
-      "fix_is": "nothing in the system. This is a property of what a proxy cell CAN measure: a value that crosses two decoders is reported by the second one, so a leniency in the first is invisible unless the first is the one being called. The cell stays in the table for py, and is registered here for the surfaces that structurally cannot see it.",
-      "note": [
-        "Deliberately NOT spelled as a per-consumer expectation. Widening expect_by_provider to an expect_by_consumer would pin `the proxy canonicalises` as a CONTRACT, and it is not one \u2014 it is what happens to be true of one decoder pair today. If the C++ decoder stopped being lenient, this cell would answer something else through the proxy and an expectation would still be green.",
-        "The honest alternative is a `skip[]` entry \u2014 `this surface cannot express the cell` \u2014 and it was rejected because the surface DOES answer, with a defensible value. A skip would hide a real measurement; an xfail keeps it printed with the reason attached.",
-        "NOT cross-case pollution, MEASURED: this case was in the same `isolate: true` A/B as the four Optional cells above (see ext-optional-return-shape-through-the-qt-proxy). Giving it a daemon of its own changed nothing \u2014 both proxy consumers still answer [{\"_bytes\": \"aGk\"}] on test_fullapi_ext_rust, and py still answers [\"hi\"]."
-      ]
-    }
-  ],
+  "xfail": [],
   "skip": [],
   "fixed": [
     {
@@ -160,6 +107,15 @@
       "fixed_by": "logos-plugin-qt#42 (e46678a), carried by logos-module-builder#252 (8007924). The generated C++ and Rust dispatches already refused the call; the glue answered first.",
       "what": "lidl(\"junk\") answered null with status ok. The Qt host glue answers the lidl() built-in before the module's dispatch runs, and its own argument check returned an empty QVariant.",
       "verified": "On this relock, with the entry still registered, 6 of 6 cells xpass (both providers, all three consumers), answering {\"__error__\": \"invalid_args\"}, and nothing else moves: pass 267, xfail 3, xpass 6. With the entry retired: pass 273, xfail 3, exit 0."
+    },
+    {
+      "ids": [
+        "ext-nested-int-range-unchecked-on-one-provider",
+        "ext-bstr-leniency-canonicalised-by-the-proxy"
+      ],
+      "fixed_by": "logos-rust-sdk 569ecc5, typed LIDL collections (logos-co/logos-rust-sdk#64), which the Rust fixtures take since logos-test-modules#66 and #69.",
+      "what": "test_fullapi_ext_rust bound [[int]] and [bstr] as untyped Values: it echoed 2^64-1 two containers deep instead of refusing it, and echoed a plain string in a [bstr] slot verbatim instead of decoding it to bytes. Typed, it decodes both the way test_fullapi_ext_cpp does, so the proxy no longer hides a leniency the provider has lost.",
+      "verified": "On logoscore-py master with this branch in place of its logos-test-modules pin, on Linux: with both entries still registered, [[int]]/out-of-signed-range on ext_rust/py went xpass (dispatch_failed, as ext_cpp answers) and [bstr]/lenient-plain-string on ext_rust/py answered [{\"_bytes\": \"aGk\"}] against the old per-provider pin [\"hi\"]. With both retired and the case pinned to the canonical form, the ext table passes 276 of 276. logos-test-modules#66 measured the same on Linux and macOS, with every other cell unchanged."
     }
   ],
   "unmeasurable": []
